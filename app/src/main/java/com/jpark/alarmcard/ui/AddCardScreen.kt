@@ -122,75 +122,96 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun AddBusTab(vm: MainViewModel, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var q by remember { mutableStateOf("") }
-    var stations by remember { mutableStateOf<List<BusStationSearchResult>>(emptyList()) }
+    var input by remember { mutableStateOf("") }
     var selectedStation by remember { mutableStateOf<BusStationSearchResult?>(null) }
-    var routeChoices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // routeId to routeNo
+    var routeChoices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     val checkedRoutes = remember { mutableStateListOf<String>() }
     var loading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.padding(12.dp)) {
-        SearchBar(q, "정류장명 (예: 강남역, 시청)") { q = it }
-        Button(onClick = {
-            scope.launch {
-                loading = true
-                stations = runCatching { vm.searchStations(q) }.getOrDefault(emptyList())
-                selectedStation = null
-                routeChoices = emptyList()
-                checkedRoutes.clear()
-                loading = false
-            }
-        }, enabled = q.isNotBlank() && !loading, modifier = Modifier.padding(top = 8.dp)) {
-            Text(if (loading) "검색 중..." else "정류장 검색")
+        Text(
+            "네이버 지도에서 정류장 페이지 URL을 복사해 붙여넣으세요.",
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+        Text(
+            "예) https://map.naver.com/p/search/판교역동편/bus-station/194374?...\n" +
+                "또는 정류장 ID(숫자)만: 194374",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
+        Spacer(Modifier.height(6.dp))
+        SearchBar(input, "네이버 지도 URL 또는 정류장 ID") { input = it }
+        Button(
+            onClick = {
+                scope.launch {
+                    loading = true
+                    errorMsg = null
+                    val list = runCatching { vm.searchStations(input) }.getOrDefault(emptyList())
+                    if (list.isEmpty()) {
+                        errorMsg = "URL 또는 ID를 인식하지 못했습니다. 네이버 지도의 정류장 페이지 URL을 붙여넣어 주세요."
+                        selectedStation = null
+                        routeChoices = emptyList()
+                    } else {
+                        val st = list.first()
+                        selectedStation = st
+                        val detail = runCatching {
+                            vm.previewStationArrivals(st.stationId, st.cityCode)
+                        }.getOrNull()
+                        routeChoices = detail?.arrivals?.map { it.routeId to it.routeNo } ?: emptyList()
+                        if (routeChoices.isEmpty()) {
+                            errorMsg = "도착정보를 가져오지 못했습니다. ID가 맞는지 확인해 주세요."
+                        }
+                    }
+                    loading = false
+                }
+            },
+            enabled = input.isNotBlank() && !loading,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Text(if (loading) "확인 중..." else "정류장 확인")
         }
+
+        errorMsg?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, color = Color(0xFFD32F2F), fontSize = 12.sp)
+        }
+
         Spacer(Modifier.height(10.dp))
 
-        if (selectedStation == null) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(stations, key = { it.stationId }) { st ->
-                    ResultRow(
-                        title = st.stationName,
-                        subtitle = listOfNotNull(st.displayCode, st.cityCode).joinToString(" · "),
-                        onClick = {
-                            selectedStation = st
-                            scope.launch {
-                                loading = true
-                                val detail = runCatching {
-                                    vm.previewStationArrivals(st.stationId, st.cityCode)
-                                }.getOrNull()
-                                routeChoices = detail?.arrivals?.map { it.routeId to it.routeNo } ?: emptyList()
-                                loading = false
-                            }
+        selectedStation?.let { st ->
+            Text("정류장: ${st.stationName}", fontWeight = FontWeight.Bold)
+            Text("(ID: ${st.stationId})", fontSize = 11.sp, color = Color.Gray)
+            Spacer(Modifier.height(4.dp))
+            if (routeChoices.isNotEmpty()) {
+                Text(
+                    "표시할 노선을 선택하세요 (선택 안 하면 전체 표시)",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(routeChoices, key = { it.first }) { (id, no) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = checkedRoutes.contains(id),
+                                onCheckedChange = {
+                                    if (it) checkedRoutes.add(id) else checkedRoutes.remove(id)
+                                }
+                            )
+                            Text(no)
                         }
-                    )
-                }
-            }
-        } else {
-            Text("정류장: ${selectedStation!!.stationName}", fontWeight = FontWeight.Bold)
-            Text("표시할 노선을 선택하세요 (선택 안 하면 전체 표시)", color = Color.Gray, fontSize = 12.sp)
-            Spacer(Modifier.height(6.dp))
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(routeChoices, key = { it.first }) { (id, no) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = checkedRoutes.contains(id),
-                            onCheckedChange = {
-                                if (it) checkedRoutes.add(id) else checkedRoutes.remove(id)
-                            }
-                        )
-                        Text(no)
                     }
                 }
             }
             Button(onClick = {
-                vm.addBus(selectedStation!!, checkedRoutes.toList())
+                vm.addBus(st, checkedRoutes.toList())
                 onBack()
             }) {
                 Icon(Icons.Filled.Check, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
                 Text("이 정류장 카드 추가")
             }
         }
