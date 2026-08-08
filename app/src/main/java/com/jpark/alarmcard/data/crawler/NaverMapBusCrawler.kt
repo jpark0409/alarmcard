@@ -74,6 +74,8 @@ class NaverMapBusCrawler @Inject constructor() {
      * 지원 형태:
      *  - https://map.naver.com/p/search/{query}/bus-station/{stationId}?...
      *  - https://map.naver.com/p/search/{query}/bus-route/{routeId}?bsl={routeId},{stationId},{seq}...
+     *  - https://map.naver.com/p/bus/bus-station/{name}/bus-route/{routeId}?bsl=...
+     *  - https://m.map.naver.com/bus/station?stationID={stationId}&busID={routeId}
      *  - stationId 숫자만 (예: 194374)
      */
     fun parseStationUrl(input: String): BusStationSearchResult? {
@@ -82,7 +84,18 @@ class NaverMapBusCrawler @Inject constructor() {
             return BusStationSearchResult(stationId = s, stationName = "정류장 $s")
         }
 
-        // bus-station/{id}
+        // Mobile web: m.map.naver.com/bus/station?stationID=194374&busID=20025664
+        val mobileStationRx = Regex("m\\.map\\.naver\\.com/bus/station")
+        if (mobileStationRx.find(s) != null) {
+            val stationIdRx = Regex("[?&]stationID=(\\d+)")
+            val stationIdMatch = stationIdRx.find(s)
+            if (stationIdMatch != null) {
+                val stationId = stationIdMatch.groupValues[1]
+                return BusStationSearchResult(stationId = stationId, stationName = "정류장 $stationId")
+            }
+        }
+
+        // bus-station/{id} (desktop web)
         val busStationRx = Regex("/bus-station/(\\d+)")
         val bsMatch = busStationRx.find(s)
         val nameFromPath: String? = Regex("/p/search/([^/?]+)").find(s)?.groupValues?.getOrNull(1)?.let {
@@ -93,7 +106,7 @@ class NaverMapBusCrawler @Inject constructor() {
             return BusStationSearchResult(stationId = id, stationName = nameFromPath ?: "정류장 $id")
         }
 
-        // bsl={routeId},{stationId},{seq} 로부터 stationId 추출
+        // bsl={routeId},{stationId},{seq} 로부터 stationId 추출 (desktop web)
         val bslRx = Regex("[?&]bsl=([^&]+)")
         val bslMatch = bslRx.find(s)
         if (bslMatch != null) {
