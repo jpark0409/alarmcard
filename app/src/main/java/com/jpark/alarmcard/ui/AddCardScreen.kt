@@ -3,7 +3,6 @@ package com.jpark.alarmcard.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +23,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -55,8 +53,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddCardScreen(
     vm: MainViewModel,
-    onBack: () -> Unit,
-    onOpenBusPicker: () -> Unit = {}
+    onBack: () -> Unit
 ) {
     var tab by remember { mutableStateOf(0) }
     Scaffold(
@@ -79,40 +76,69 @@ fun AddCardScreen(
             }
             when (tab) {
                 0 -> AddStockTab(vm, onBack)
-                1 -> AddBusTab(vm, onBack, onOpenBusPicker)
+                1 -> AddBusTab(vm, onBack)
                 2 -> AddFxTab(vm, onBack)
             }
         }
     }
 }
 
-/* ---------- 주식 ---------- */
+/* ---------- 주식 (URL / 코드 입력 방식) ---------- */
 @Composable
 private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var q by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<StockSearchResult>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.padding(12.dp)) {
-        SearchBar(q, "종목명 또는 티커 (예: 삼성전자, AAPL)") {
-            q = it
+        Text(
+            "네이버 금융 종목 URL 또는 6자리 종목코드를 입력하세요.",
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+        Text(
+            "예) https://finance.naver.com/item/main.naver?code=005930\n" +
+                "또는 코드만: 005930",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
+        Spacer(Modifier.height(6.dp))
+        SearchBar(q, "네이버 금융 URL 또는 종목코드") { q = it }
+        Button(
+            onClick = {
+                scope.launch {
+                    loading = true
+                    errorMsg = null
+                    results = runCatching { vm.searchStocks(q) }.getOrDefault(emptyList())
+                    if (results.isEmpty()) {
+                        errorMsg = "URL 또는 코드를 인식하지 못했거나, 정보를 가져오지 못했습니다."
+                    }
+                    loading = false
+                }
+            },
+            enabled = q.isNotBlank() && !loading,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Text(if (loading) "확인 중..." else "종목 확인")
         }
-        Button(onClick = {
-            scope.launch {
-                loading = true
-                results = runCatching { vm.searchStocks(q) }.getOrDefault(emptyList())
-                loading = false
-            }
-        }, enabled = q.isNotBlank() && !loading, modifier = Modifier.padding(top = 8.dp)) {
-            Text(if (loading) "검색 중..." else "검색")
+
+        errorMsg?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, color = Color(0xFFD32F2F), fontSize = 12.sp)
         }
+
         Spacer(Modifier.height(10.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(results, key = { it.symbol + it.market }) { r ->
+                val priceLine = r.price?.let { p ->
+                    val chg = r.change?.let { c -> " (${if (c >= 0) "+" else ""}${c.toLong()})" } ?: ""
+                    "현재가 ${"%,d".format(p.toLong())}$chg"
+                } ?: "가격 정보 없음"
                 ResultRow(
                     title = r.name,
-                    subtitle = "${r.symbol}  ·  ${if (r.market == StockMarket.DOMESTIC) "국내" else "해외"}",
+                    subtitle = "${r.symbol}  ·  ${if (r.market == StockMarket.DOMESTIC) "국내" else "해외"}\n$priceLine",
                     onClick = {
                         vm.addStock(r); onBack()
                     }
@@ -122,12 +148,11 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
     }
 }
 
-/* ---------- 버스 ---------- */
+/* ---------- 버스 (URL / ID 입력 전용) ---------- */
 @Composable
 private fun AddBusTab(
     vm: MainViewModel,
-    onBack: () -> Unit,
-    onOpenBusPicker: () -> Unit
+    onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
@@ -138,22 +163,14 @@ private fun AddBusTab(
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.padding(12.dp)) {
-        // ★ 권장: 지도 웹뷰에서 직접 선택
-        Button(
-            onClick = onOpenBusPicker,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("네이버 지도에서 정류장·노선 선택하기")
-        }
-        Spacer(Modifier.height(12.dp))
         Text(
-            "또는 이미 알고 있는 네이버 지도 URL / 정류장 ID를 직접 입력할 수 있습니다.",
-            fontSize = 11.sp,
+            "네이버 지도 정류장 URL 또는 정류장 ID(숫자)를 입력하세요.",
+            fontSize = 12.sp,
             color = Color.Gray
         )
         Text(
-            "예) https://map.naver.com/p/search/판교역동편/bus-station/194374?...\n" +
-                "또는 정류장 ID(숫자)만: 194374",
+            "예) https://map.naver.com/p/search/판교역/bus-station/194374?...\n" +
+                "또는 정류장 ID만: 194374",
             fontSize = 11.sp,
             color = Color.Gray
         )
@@ -201,7 +218,6 @@ private fun AddBusTab(
             Text("(ID: ${st.stationId})", fontSize = 11.sp, color = Color.Gray)
             Spacer(Modifier.height(4.dp))
 
-            // 확인 버튼을 먼저 배치해서 목록이 길어도 항상 보이도록 한다.
             Button(
                 onClick = {
                     vm.addBus(st, checkedRoutes.toList())
@@ -227,7 +243,6 @@ private fun AddBusTab(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
                         .padding(bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -251,7 +266,6 @@ private fun AddBusTab(
 /* ---------- 환율 ---------- */
 @Composable
 private fun AddFxTab(vm: MainViewModel, onBack: () -> Unit) {
-    val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<FxQuote>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 

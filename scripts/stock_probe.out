@@ -1,0 +1,101 @@
+﻿converted len=192715
+pattern 'no_today' hits: 3
+pattern 'no_up' hits: 17
+pattern 'no_down' hits: 9
+pattern 'no_exday' hits: 3
+pattern '_nowVal' hits: 1
+pattern 'GetCommonContext' hits: 0
+pattern 'wrap_company' hits: 1
+pattern 'tah p11' hits: 6
+pattern 'ico ' hits: 11
+pattern 'blind' hits: 57
+pattern 'og:title' hits: 1
+pattern 'og:description' hits: 1
+--- no_today context ---
+ss="today">
+                            <p class="no_today">
+                                
+                                
+                                <em class="no_up">
+                                    
+                                    
+                                        
+                                            
+                                            <span class="blind">231,000</span>
+                                            <span class="no2">2</span><span class="no3">3</span><span class="no1">1</span><span class="shim">,</span><span class="no0">0</span><span class="no0">0</span><span class="no0">0</span>
+                                        </em>
+                            </p>
+                            <p class="no_exday">
+                                <span class="sptxt sp_txt1">???쇰?鍮?</span>
+                                
+                                
+                                    
+                                    <em class="no_up">
+                                        <span class="ico up">????/span>
+                                        
+                                        
+                                            
+                                                
+                                                    
+                                                    <span class="blind">500</span>
+                                                    <span class="no5">5</span><span class="no0">0</span><span
+--- no_exday context ---
+       </p>
+                            <p class="no_exday">
+                                <span class="sptxt sp_txt1">???쇰?鍮?</span>
+                                
+                                
+                                    
+                                    <em class="no_up">
+                                        <span class="ico up">????/span>
+                                        
+                                        
+                                            
+                                                
+                                                    
+                                                    <span class="blind">500</span>
+                                                    <span class="no5">5</span><span class="no0">0</span><span class="no0">0</span>
+                                                </em>
+                                                <span class="bar">l</span>
+                                                
+                                                
+                                                <em class="no_up">
+                                                    <span class="ico plus">+</span>
+                                                    
+                                                    
+                                                        
+                                                            
+                                                            <span class="blind">0.22</sp
+title: ?쇱?깆???? : Npay 利?沅?
+og:title: ?쇱?깆???? - Npay 利?沅? : Npay 利?沅?
+og:description: 愿?ъ?紐⑹?? ?ㅼ??媛? 二쇨?瑜?媛??鍮?瑜닿? ???명???? 怨?/>
+		    
+		    
+		
+		 
+			
+			    <meta property=
+--- wrap_company context ---
+wrap_company">
+            <h2><a href="#"
+                   onClick="clickcr(this, 'sop.title', '', '', event);window.location.reload();">?쇱?깆????</a>
+            </h2>
+
+            <div class="description">
+                <span class="code">005930</span>
+                
+                    <img src="https://ssl.pstatic.net/imgstock/item_renewal/btn_kospi.gif" width="33" height="16"
+                         alt="肄??ㅽ?? class="kospi">
+                
+                
+                
+                <span class="blind">??吏?</span>
+                <span id="time">
+					
+                        
+                        
+                        
+                            <em class="date">2026.08.07 <span>湲곗?(KRX ?λ?媛?)</span></em>
+                        
+                    
+					</spa
