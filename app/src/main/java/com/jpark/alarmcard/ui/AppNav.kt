@@ -21,7 +21,18 @@ fun AppNav() {
             val vm: MainViewModel = hiltViewModel()
             AddCardScreen(
                 vm = vm,
-                onBack = { nav.popBackStack() }
+                onBack = { nav.popBackStack() },
+                onOpenBusPicker = { nav.navigate("bus_picker") }
+            )
+        }
+        composable("bus_picker") {
+            val vm: MainViewModel = hiltViewModel()
+            BusPickerScreen(
+                vm = vm,
+                onDone = {
+                    // add 화면까지 함께 닫고 홈으로
+                    nav.popBackStack("home", inclusive = false)
+                }
             )
         }
     }

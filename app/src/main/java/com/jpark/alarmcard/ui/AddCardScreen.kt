@@ -53,7 +53,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddCardScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun AddCardScreen(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    onOpenBusPicker: () -> Unit = {}
+) {
     var tab by remember { mutableStateOf(0) }
     Scaffold(
         topBar = {
@@ -75,7 +79,7 @@ fun AddCardScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             when (tab) {
                 0 -> AddStockTab(vm, onBack)
-                1 -> AddBusTab(vm, onBack)
+                1 -> AddBusTab(vm, onBack, onOpenBusPicker)
                 2 -> AddFxTab(vm, onBack)
             }
         }
@@ -120,7 +124,11 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
 
 /* ---------- 버스 ---------- */
 @Composable
-private fun AddBusTab(vm: MainViewModel, onBack: () -> Unit) {
+private fun AddBusTab(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    onOpenBusPicker: () -> Unit
+) {
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
     var selectedStation by remember { mutableStateOf<BusStationSearchResult?>(null) }
@@ -130,9 +138,17 @@ private fun AddBusTab(vm: MainViewModel, onBack: () -> Unit) {
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.padding(12.dp)) {
+        // ★ 권장: 지도 웹뷰에서 직접 선택
+        Button(
+            onClick = onOpenBusPicker,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("네이버 지도에서 정류장·노선 선택하기")
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
-            "네이버 지도에서 정류장 페이지 URL을 복사해 붙여넣으세요.",
-            fontSize = 12.sp,
+            "또는 이미 알고 있는 네이버 지도 URL / 정류장 ID를 직접 입력할 수 있습니다.",
+            fontSize = 11.sp,
             color = Color.Gray
         )
         Text(
