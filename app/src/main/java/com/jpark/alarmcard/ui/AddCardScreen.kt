@@ -200,6 +200,24 @@ private fun AddBusTab(
             Text("정류장: ${st.stationName}", fontWeight = FontWeight.Bold)
             Text("(ID: ${st.stationId})", fontSize = 11.sp, color = Color.Gray)
             Spacer(Modifier.height(4.dp))
+
+            // 확인 버튼을 먼저 배치해서 목록이 길어도 항상 보이도록 한다.
+            Button(
+                onClick = {
+                    vm.addBus(st, checkedRoutes.toList())
+                    onBack()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = null)
+                Spacer(Modifier.height(0.dp))
+                Text(
+                    if (checkedRoutes.isEmpty()) "이 정류장 카드 추가 (전체 노선)"
+                    else "이 정류장 카드 추가 (${checkedRoutes.size}개 노선)"
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+
             if (routeChoices.isNotEmpty()) {
                 Text(
                     "표시할 노선을 선택하세요 (선택 안 하면 전체 표시)",
@@ -207,7 +225,10 @@ private fun AddBusTab(
                     fontSize = 12.sp
                 )
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(routeChoices, key = { it.first }) { (id, no) ->
@@ -222,13 +243,6 @@ private fun AddBusTab(
                         }
                     }
                 }
-            }
-            Button(onClick = {
-                vm.addBus(st, checkedRoutes.toList())
-                onBack()
-            }) {
-                Icon(Icons.Filled.Check, contentDescription = null)
-                Text("이 정류장 카드 추가")
             }
         }
     }
