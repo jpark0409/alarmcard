@@ -12,6 +12,7 @@ jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     
     permissions:
       contents: read
@@ -27,20 +28,30 @@ jobs:
           distribution: 'temurin'
           cache: gradle
       
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Ensure Gradle wrapper exists
+        run: |
+          if [ ! -f "./gradlew" ] || [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Bootstrapping Gradle wrapper..."
+            gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
+          chmod +x ./gradlew
       
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon --stacktrace
       
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew test --no-daemon --stacktrace
       
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
       
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -52,6 +63,7 @@ jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     steps:
       - name: Checkout repository
@@ -64,14 +76,24 @@ jobs:
           distribution: 'temurin'
           cache: gradle
       
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Ensure Gradle wrapper exists
+        run: |
+          if [ ! -f "./gradlew" ] || [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Bootstrapping Gradle wrapper..."
+            gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
+          chmod +x ./gradlew
       
       - name: Run lint
-        run: ./gradlew lint
+        run: ./gradlew lint --no-daemon --stacktrace
       
       - name: Upload lint report
         uses: actions/upload-artifact@v4
@@ -88,6 +110,7 @@ jobs:
     if: github.event_name == 'release'
     permissions:
       contents: write
+    timeout-minutes: 40
     
     steps:
       - name: Checkout repository
@@ -100,14 +123,24 @@ jobs:
           distribution: 'temurin'
           cache: gradle
       
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Ensure Gradle wrapper exists
+        run: |
+          if [ ! -f "./gradlew" ] || [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Bootstrapping Gradle wrapper..."
+            gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
+          chmod +x ./gradlew
       
       - name: Build Release APK (unsigned)
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
       
       - name: Find Release APK
         id: find_apk
