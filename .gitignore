@@ -10,7 +10,6 @@ Thumbs.db
 # Node
 node_modules/
 dist/
-build/
 .env
 .env.local
 
@@ -22,3 +21,20 @@ venv/
 
 # Logs
 *.log
+
+# ----- Android / Gradle -----
+.gradle/
+build/
+/app/build/
+/app/release/
+local.properties
+captures/
+*.iml
+*.hprof
+
+# Keystore
+*.jks
+*.keystore
+
+# Kotlin
+.kotlin/
