@@ -75,23 +75,38 @@ Windows에서는 `gradlew.bat` 을 사용하세요.
 
 Android 폰이 없어도 PC에서 3가지 방법으로 테스트할 수 있습니다.
 
-### 방법 A — 이 저장소의 자동 스크립트 (Google 공식 Android Emulator)
+### 방법 A — 이 저장소의 자동 스크립트 (Google 공식 Android Emulator) ✅ 검증됨
 
-Windows PowerShell(관리자 아님, 일반 사용자) 에서:
+3단계로 나뉜 스크립트를 순서대로 실행합니다. Windows PowerShell(관리자 아님)에서:
 
+**1) JDK 17 자동 설치 (winget 사용)**
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_on_emulator.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_jdk.ps1
 ```
+→ Eclipse Temurin JDK 17을 `C:\Program Files\Eclipse Adoptium\jdk-17.x.x-hotspot` 에 설치.
 
-스크립트가 자동으로:
-1. `%USERPROFILE%\AndroidSDK` 에 SDK cmdline-tools 다운로드
-2. `platform-tools`, `emulator`, `system-images;android-34;google_apis;x86_64` 설치 + 라이선스 자동 수락
-3. `alarmcard_avd` AVD 생성
-4. 에뮬레이터 부팅 → APK 설치 → 앱 실행
+**2) SDK + 시스템 이미지 + AVD + 에뮬레이터 + APK 설치 (한 번에)**
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup_emu.ps1
+```
+→ 자동으로:
+1. `%USERPROFILE%\AndroidSDK\cmdline-tools\latest` 에 Android SDK cmdline-tools 다운로드 (curl 사용, 재시도 지원)
+2. 라이선스 파일 자동 생성 (프롬프트 없음)
+3. `platform-tools`, `emulator`, `platforms;android-34`, `system-images;android-34;google_apis;x86_64` 설치
+4. `alarmcard_avd` AVD 생성 (Pixel 5, Android 14)
+5. 에뮬레이터 부팅 → APK 자동 설치 → 앱 실행
 
-요구사항: JDK 17 (스크립트가 winget 으로 자동 설치 시도), BIOS 가상화(Intel VT-x/AMD-V) 활성화. 최초 다운로드 2~4GB.
+최초 다운로드: 약 2~3GB (JDK 160MB + cmdline-tools 150MB + emulator/system-image 등). BIOS 가상화(Intel VT-x/AMD-V) 활성화 필요.
 
-APK 파일이 아직 없다면 먼저 다운로드:
+로그: `scripts\setup_emu.log` 로 진행 상황 확인 가능.
+
+**3) 이미 설치된 뒤 재실행할 때는**
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_emu2.ps1
+```
+→ SDK 재다운로드 없이 AVD 기동 + APK 재설치 + 앱 실행 (약 30초~1분).
+
+**APK 파일이 없을 때**는 먼저 다운로드:
 ```powershell
 # 최신 성공한 CI run에서 자동 다운로드
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\download.ps1
