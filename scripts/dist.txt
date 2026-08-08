@@ -1,8 +1,0 @@
-﻿
-FullName                                                               Length  
---------                                                               ------  
-C:\Users\user\Desktop\alarmcard\dist\alarmcard-debug-apk                       
-C:\Users\user\Desktop\alarmcard\dist\alarmcard-debug-apk.zip           0       
-C:\Users\user\Desktop\alarmcard\dist\alarmcard-debug-apk\app-debug.apk 19334721
-
-

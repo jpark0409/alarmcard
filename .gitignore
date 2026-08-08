@@ -38,3 +38,8 @@ captures/
 
 # Kotlin
 .kotlin/
+
+# CI 로컬 산출물 및 로그
+/dist/
+/scripts/*.log
+/scripts/*.txt

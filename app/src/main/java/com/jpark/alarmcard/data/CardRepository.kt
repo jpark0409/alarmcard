@@ -56,6 +56,57 @@ class CardRepository @Inject constructor(
 
     suspend fun remove(id: String) = dao.deleteById(id)
 
+    /** 버스카드 알람 설정 갱신 */
+    suspend fun setBusAlarm(id: String, enabled: Boolean, minutesBefore: Int) {
+        val entity = dao.getById(id) ?: return
+        if (entity.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS) return
+        dao.upsert(
+            entity.copy(
+                alarmEnabled = enabled,
+                alarmMinutesBefore = minutesBefore,
+                // 활성화 시 이전 발송 이력 리셋
+                alarmLastFiredAt = if (enabled) 0L else entity.alarmLastFiredAt
+            )
+        )
+    }
+
+    /** 알람이 켜져있는 버스카드가 하나라도 있는지 (Worker 스케줄러가 사용) */
+    suspend fun hasActiveBusAlarm(): Boolean =
+        dao.getAll().any {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS && it.alarmEnabled
+        }
+
+    /**
+     * 활성 버스카드들을 새로고침한 뒤, 알림을 발송해야 할 카드 목록을 반환.
+     * (실제 발송은 상위 레이어에서 수행)
+     */
+    suspend fun refreshBusAlarmsAndSelectFireable(): List<com.jpark.alarmcard.domain.model.BusCard> {
+        val entities = dao.getAll().filter {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS && it.alarmEnabled
+        }
+        // 새로고침
+        entities.forEach { runCatching { refreshCard(it.toDomain()) } }
+        // 최신 상태로 다시 읽어 임계치 만족 여부 검사
+        val nowMs = System.currentTimeMillis()
+        val fire = mutableListOf<com.jpark.alarmcard.domain.model.BusCard>()
+        for (e in dao.getAll()) {
+            if (e.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS || !e.alarmEnabled) continue
+            val bc = e.toDomain() as com.jpark.alarmcard.domain.model.BusCard
+            // 필터된 노선 중에 eta1Sec <= alarmMinutesBefore*60 인 것이 있는지
+            val threshold = bc.alarmMinutesBefore * 60
+            val hit = bc.arrivals.firstOrNull { a -> a.eta1Sec != null && a.eta1Sec in 0..threshold }
+            if (hit != null) {
+                // 중복 방지: 마지막 알림이 최근 5분 이내면 스킵
+                if (nowMs - bc.alarmLastFiredAt > 5 * 60_000L) {
+                    // 발송 기록
+                    dao.upsert(e.copy(alarmLastFiredAt = nowMs))
+                    fire += bc
+                }
+            }
+        }
+        return fire
+    }
+
     suspend fun reorder(ids: List<String>) {
         val entities = dao.getAll().associateBy { it.id }
         ids.forEachIndexed { idx, id ->

@@ -32,6 +32,9 @@ data class CardEntity(
     val cityCode: String? = null,
     val filterRouteIdsCsv: String? = null,
     val arrivalsJson: String? = null,
+    val alarmEnabled: Boolean = false,
+    val alarmMinutesBefore: Int = 3,
+    val alarmLastFiredAt: Long = 0L,
 
     // Fx
     val code: String? = null,
@@ -59,7 +62,10 @@ fun Card.toEntity(): CardEntity = when (this) {
         updatedAt = updatedAt, lastError = lastError,
         stationId = stationId, stationName = stationName, cityCode = cityCode,
         filterRouteIdsCsv = filterRouteIds.joinToString(","),
-        arrivalsJson = ArrivalCodec.encode(arrivals)
+        arrivalsJson = ArrivalCodec.encode(arrivals),
+        alarmEnabled = alarmEnabled,
+        alarmMinutesBefore = alarmMinutesBefore,
+        alarmLastFiredAt = alarmLastFiredAt
     )
     is FxCard -> CardEntity(
         id = id, type = CardEntity.TYPE_FX, orderIdx = order,
@@ -83,7 +89,10 @@ fun CardEntity.toDomain(): Card = when (type) {
         stationId = stationId.orEmpty(), stationName = stationName.orEmpty(),
         cityCode = cityCode,
         filterRouteIds = filterRouteIdsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-        arrivals = arrivalsJson?.let { ArrivalCodec.decode(it) } ?: emptyList()
+        arrivals = arrivalsJson?.let { ArrivalCodec.decode(it) } ?: emptyList(),
+        alarmEnabled = alarmEnabled,
+        alarmMinutesBefore = alarmMinutesBefore,
+        alarmLastFiredAt = alarmLastFiredAt
     )
     CardEntity.TYPE_FX -> FxCard(
         id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,

@@ -19,7 +19,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,15 +30,21 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -94,7 +103,13 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(cards, key = { it.id }) { c ->
-                    CardItem(c, onDelete = { vm.deleteCard(c.id) })
+                    CardItem(
+                        card = c,
+                        onDelete = { vm.deleteCard(c.id) },
+                        onSetBusAlarm = { enabled, minutes ->
+                            vm.setBusAlarm(c.id, enabled, minutes)
+                        }
+                    )
                 }
             }
         }
@@ -115,7 +130,13 @@ private fun EmptyState(pv: PaddingValues) {
 }
 
 @Composable
-fun CardItem(card: DomainCard, onDelete: () -> Unit) {
+fun CardItem(
+    card: DomainCard,
+    onDelete: () -> Unit,
+    onSetBusAlarm: (Boolean, Int) -> Unit
+) {
+    var showAlarmDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -130,6 +151,31 @@ fun CardItem(card: DomainCard, onDelete: () -> Unit) {
                 Spacer(Modifier.size(8.dp))
                 Text(cardTitle(card), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
+                // 버스카드에만 종 아이콘
+                if (card is BusCard) {
+                    IconButton(onClick = {
+                        if (card.alarmEnabled) {
+                            // 이미 켜져있으면 바로 끔 (탭 한번으로 토글)
+                            onSetBusAlarm(false, card.alarmMinutesBefore)
+                        } else {
+                            showAlarmDialog = true
+                        }
+                    }) {
+                        if (card.alarmEnabled) {
+                            Icon(
+                                Icons.Filled.Notifications,
+                                contentDescription = "알람 켜짐",
+                                tint = Color(0xFFF9A825)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Outlined.Notifications,
+                                contentDescription = "알람 설정",
+                                tint = Color.Gray
+                            )
+                        }
+                    }
+                }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Filled.Delete, contentDescription = "삭제")
                 }
@@ -148,6 +194,53 @@ fun CardItem(card: DomainCard, onDelete: () -> Unit) {
             )
         }
     }
+
+    if (showAlarmDialog && card is BusCard) {
+        BusAlarmSetupDialog(
+            initialMinutes = card.alarmMinutesBefore,
+            onDismiss = { showAlarmDialog = false },
+            onConfirm = { minutes ->
+                showAlarmDialog = false
+                onSetBusAlarm(true, minutes)
+            }
+        )
+    }
+}
+
+@Composable
+private fun BusAlarmSetupDialog(
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var text by remember { mutableStateOf(initialMinutes.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("도착 알림 설정") },
+        text = {
+            Column {
+                Text("몇 분 전에 알림을 받을까요? (1~30분)")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { new -> text = new.filter { it.isDigit() }.take(2) },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val n = text.toIntOrNull()?.coerceIn(1, 30) ?: initialMinutes
+                onConfirm(n)
+            }) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
 }
 
 @Composable
@@ -213,22 +306,30 @@ private fun FxBody(c: FxCard) {
 private fun BusBody(c: BusCard) {
     if (c.arrivals.isEmpty()) {
         Text("도착 정보 없음", color = Color.Gray)
-        return
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        c.arrivals.take(6).forEach { a ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(a.routeNo, fontWeight = FontWeight.Bold, modifier = Modifier.width(72.dp))
-                Text(fmtEta(a.eta1Sec, a.remainStops1), fontSize = 13.sp)
-                if (a.eta2Sec != null) {
-                    Text(
-                        "  |  ${fmtEta(a.eta2Sec, a.remainStops2)}",
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            c.arrivals.take(6).forEach { a ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(a.routeNo, fontWeight = FontWeight.Bold, modifier = Modifier.width(72.dp))
+                    Text(fmtEta(a.eta1Sec, a.remainStops1), fontSize = 13.sp)
+                    if (a.eta2Sec != null) {
+                        Text(
+                            "  |  ${fmtEta(a.eta2Sec, a.remainStops2)}",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
         }
+    }
+    if (c.alarmEnabled) {
+        Text(
+            "🔔 ${c.alarmMinutesBefore}분 전 알림 활성",
+            color = Color(0xFFF9A825),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -259,4 +360,3 @@ private fun footerText(c: DomainCard): String {
     val time = if (c.updatedAt == 0L) "아직 갱신 전" else "갱신 " + SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(c.updatedAt))
     return c.lastError?.let { "⚠ $it · $time" } ?: time
 }
-

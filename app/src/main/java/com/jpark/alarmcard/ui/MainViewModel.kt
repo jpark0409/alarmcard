@@ -1,8 +1,10 @@
 package com.jpark.alarmcard.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jpark.alarmcard.data.CardRepository
+import com.jpark.alarmcard.notify.BusAlarmWorker
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
@@ -25,11 +27,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
+    app: Application,
     private val repo: CardRepository,
     private val stockCrawler: NaverStockCrawler,
     private val fxCrawler: NaverFxCrawler,
     private val busCrawler: NaverMapBusCrawler
-) : ViewModel() {
+) : AndroidViewModel(app) {
 
     val cards: StateFlow<List<Card>> = repo.observeCards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -57,8 +60,27 @@ class MainViewModel @Inject constructor(
         refresh()
     }
 
-    fun deleteCard(id: String) = viewModelScope.launch { repo.remove(id) }
+    fun deleteCard(id: String) = viewModelScope.launch {
+        repo.remove(id)
+        rescheduleBusAlarmWorker()
+    }
     fun reorder(ids: List<String>) = viewModelScope.launch { repo.reorder(ids) }
+
+    /** 버스카드 알람 on/off 및 임계값 저장. 활성 시 Worker 예약. */
+    fun setBusAlarm(cardId: String, enabled: Boolean, minutesBefore: Int) = viewModelScope.launch {
+        repo.setBusAlarm(cardId, enabled, minutesBefore)
+        rescheduleBusAlarmWorker()
+    }
+
+    private suspend fun rescheduleBusAlarmWorker() {
+        val ctx = getApplication<Application>()
+        if (repo.hasActiveBusAlarm()) {
+            // 즉시 한번 실행 후 스스로 다음 사이클 예약
+            BusAlarmWorker.scheduleNext(ctx, delaySec = 5)
+        } else {
+            BusAlarmWorker.cancel(ctx)
+        }
+    }
 
     /* ---------- Add flows ---------- */
 
