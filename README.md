@@ -71,6 +71,49 @@ Windows에서는 `gradlew.bat` 을 사용하세요.
 
 ---
 
+## PC에서 실행/테스트
+
+Android 폰이 없어도 PC에서 3가지 방법으로 테스트할 수 있습니다.
+
+### 방법 A — 이 저장소의 자동 스크립트 (Google 공식 Android Emulator)
+
+Windows PowerShell(관리자 아님, 일반 사용자) 에서:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_on_emulator.ps1
+```
+
+스크립트가 자동으로:
+1. `%USERPROFILE%\AndroidSDK` 에 SDK cmdline-tools 다운로드
+2. `platform-tools`, `emulator`, `system-images;android-34;google_apis;x86_64` 설치 + 라이선스 자동 수락
+3. `alarmcard_avd` AVD 생성
+4. 에뮬레이터 부팅 → APK 설치 → 앱 실행
+
+요구사항: JDK 17 (스크립트가 winget 으로 자동 설치 시도), BIOS 가상화(Intel VT-x/AMD-V) 활성화. 최초 다운로드 2~4GB.
+
+APK 파일이 아직 없다면 먼저 다운로드:
+```powershell
+# 최신 성공한 CI run에서 자동 다운로드
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\download.ps1
+```
+
+### 방법 B — Windows 11 WSA (Windows Subsystem for Android)
+
+1. Microsoft Store에서 **Amazon Appstore** 설치 (자동으로 WSA도 함께 설치됨)
+2. **Windows Subsystem for Android 설정** 앱을 열고 **개발자 모드 켜기**
+3. IP:포트 표시 확인 (예: `127.0.0.1:58526`)
+4. 커맨드에서 `adb connect 127.0.0.1:58526` 후 `adb install app-debug.apk`
+
+WSA 부팅 후 `adb`가 잡히면 스크립트 방법 A의 마지막 두 단계 (install/am start)만 그대로 동작합니다.
+
+### 방법 C — 다른 서드파티 에뮬레이터
+
+- **Genymotion Personal**: VirtualBox 기반. Drag&drop APK 지원.
+- **BlueStacks / NoxPlayer / LDPlayer**: 게임용에 특화됐지만 일반 앱도 APK 파일을 그냥 드래그하면 설치됨. 성능 좋음.
+- **Anbox / Waydroid** (Linux): 컨테이너 기반, 가볍고 빠름.
+
+---
+
 ## 사용 방법
 
 1. 앱 실행 → 홈에서 우상단 **＋** 버튼으로 카드 추가.
