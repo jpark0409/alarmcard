@@ -1,0 +1,101 @@
+name: Release APK
+
+# main 브랜치에 push 될 때마다 debug APK 를 빌드해
+# 'latest' 라는 태그의 GitHub Release 를 갱신한다.
+# 사용자는 폰 브라우저에서 아래 URL 로 항상 최신 APK 를 다운로드할 수 있다.
+#   https://github.com/<owner>/<repo>/releases/latest/download/alarmcard-debug.apk
+#
+# v* 형식의 태그를 push 하면 해당 태그로 정식 릴리즈가 하나 더 만들어진다.
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Ensure Gradle wrapper exists
+        run: |
+          if [ ! -f "./gradlew" ] || [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Bootstrapping Gradle wrapper..."
+            gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
+          chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Locate APK
+        id: apk
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n1)
+          if [ -z "$APK" ]; then
+            echo "APK not found!" >&2
+            exit 1
+          fi
+          # 파일명 통일 (링크가 항상 같은 이름이도록)
+          cp "$APK" alarmcard-debug.apk
+          echo "path=alarmcard-debug.apk" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # 태그 push (v*) 인 경우: 해당 태그로 정식 릴리즈
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: alarmcard-debug.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      # main 브랜치 push 인 경우: 'latest' 라는 rolling release 를 갱신
+      - name: Publish rolling 'latest' release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest debug build"
+          body: |
+            Rolling build of `main` branch.
+
+            - commit: `${{ steps.apk.outputs.commit }}`
+            - built at: ${{ github.event.head_commit.timestamp }}
+
+            폰(안드로이드) 에서 아래 링크를 눌러 바로 설치하세요:
+            https://github.com/${{ github.repository }}/releases/latest/download/alarmcard-debug.apk
+
+            > 설치 시 “출처를 알 수 없는 앱 설치 허용” 이 필요할 수 있습니다.
+          files: alarmcard-debug.apk
+          fail_on_unmatched_files: true
+          prerelease: true
+          make_latest: true

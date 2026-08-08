@@ -1,0 +1,31 @@
+﻿bytes len=197570
+head hex: 0a 0a 09 0a 09 0a 09 0a 09 0a 09 0a 3c 68 74 6d 6c 20 6c 61 6e 67 3d 27 6b 6f 27 3e 0a 3c 68 65 61 64 3e 0a 0a 0a 09 0a 09 09 3c 74 69 74 6c 65 3e ec 82 bc ec 84 b1 ec a0 84 ec 9e 90 20 3a 20 4e 70 61 79 20 ec a6 9d ea b6 8c 3c 2f 74 69 74 6c
+meta charset raw: utf-8
+--- decoded UTF8 near wrap_company ---
+        
+                
+                <em class="summary">
+                    
+                    <a href="#" onclick="togglePannel('summary_lyr'); return false;"></a>
+                    
+                    <span class="blind">기업개요</span>
+                    <div id="summary_lyr" class="summary_lyr"
+                         style="display:none;top:22px;left:0">
+                        <ifr
+--- decoded EUC-KR near wrap_company ---
+an id="time">
+					
+                        
+                        
+                        
+                            <em class="date">2026.08.07 <span>湲곗?(KRX ?λ?媛?)</span></em>
+                        
+                    
+					</span>
+
+                <em class="realtime">
+                    <span class="blind">?ㅼ??媛?</span>
+                </em>
+                
+                
+        

@@ -40,6 +40,19 @@ app/src/main/java/com/jpark/alarmcard/
 
 ---
 
+## 폰에서 바로 다운로드 & 설치 (권장)
+
+`main` 브랜치에 push 될 때마다 GitHub Actions 가 debug APK 를 빌드해 **GitHub Release `latest`** 태그에 붙여둡니다.  
+따라서 폰 브라우저에서 아래 링크를 눌러 바로 설치할 수 있습니다:
+
+```
+https://github.com/jpark0409/alarmcard/releases/latest/download/alarmcard-debug.apk
+```
+
+- 안드로이드 “출처를 알 수 없는 앱 설치 허용” 이 필요할 수 있습니다.
+- 처음 push 후 첫 릴리즈가 만들어지기까지 5분 정도 걸립니다 (`Release APK` 워크플로우).
+- 특정 버전을 배포하고 싶으면 `git tag v1.0.0 && git push --tags` 형태로 태그를 push 하세요. 해당 태그의 정식 릴리즈도 생성됩니다.
+
 ## 빌드 (GitHub Actions에서 APK 자동 산출)
 
 이 저장소는 **push/PR 될 때마다 GitHub Actions가 debug APK를 만들어 아티팩트로 업로드**합니다.  
@@ -51,6 +64,7 @@ app/src/main/java/com/jpark/alarmcard/
 4. 압축 안의 `app-debug.apk` 파일을 안드로이드 기기에 설치. (개발자 옵션: **알 수 없는 앱 설치** 허용 필요)
 
 수동 실행: Actions 탭에서 워크플로우를 열고 **Run workflow** 클릭.
+
 
 ## (선택) 로컬 빌드
 

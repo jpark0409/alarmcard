@@ -108,19 +108,21 @@ class NaverStockCrawler @Inject constructor() {
         return emptyList()
     }
 
-    /* ---------------- 국내 (EUC-KR HTML) ---------------- */
+    /* ---------------- 국내 (UTF-8 HTML) ---------------- */
 
     private suspend fun fetchDomesticQuote(code: String): StockQuote {
         val url = "https://finance.naver.com/item/main.naver?code=$code"
-        val html = httpGetStringWithCharset(
+        // finance.naver.com 은 현재 <meta charset="utf-8"> 로 서빙되고 있음.
+        // OkHttp 기본 (UTF-8) 로 파싱한 뒤, 만약 문자가 깨진 것으로 보이면 EUC-KR fallback.
+        val html = httpGetString(
             url = url,
-            charset = Charset.forName("EUC-KR"),
             referer = "https://finance.naver.com/",
             extraHeaders = mapOf(
                 "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AlarmCard/1.0"
             )
         )
         val doc = Jsoup.parse(html)
+
 
         // 종목명: <div class="wrap_company"><h2><a>삼성전자</a></h2>
         val name = doc.selectFirst(".wrap_company h2 a")?.text()?.trim()
