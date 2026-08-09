@@ -1,23 +1,24 @@
 package com.jpark.alarmcard.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jpark.alarmcard.data.CardRepository
-import com.jpark.alarmcard.notify.BusAlarmWorker
-import com.jpark.alarmcard.notify.StockAlarmWorker
+import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
 import com.jpark.alarmcard.data.crawler.NaverStockCrawler
 import com.jpark.alarmcard.data.crawler.StockSearchResult
-import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
-import com.jpark.alarmcard.domain.model.StockMarket
+import com.jpark.alarmcard.notify.BusAlarmWorker
+import com.jpark.alarmcard.notify.StockAlarmWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,7 +50,11 @@ class MainViewModel @Inject constructor(
         if (_isRefreshing.value) return
         viewModelScope.launch {
             _isRefreshing.value = true
-            try { repo.refreshAll() } finally { _isRefreshing.value = false }
+            try {
+                repo.refreshAll()
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
@@ -66,7 +71,27 @@ class MainViewModel @Inject constructor(
         rescheduleBusAlarmWorker()
         rescheduleStockAlarmWorker()
     }
+
     fun reorder(ids: List<String>) = viewModelScope.launch { repo.reorder(ids) }
+
+    fun exportCards(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        val json = repo.exportToJson()
+        getApplication<Application>().contentResolver.openOutputStream(uri)?.use {
+            it.write(json.toByteArray())
+        }
+    }
+
+    fun importCards(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        val json = getApplication<Application>().contentResolver.openInputStream(uri)?.use {
+            it.bufferedReader().readText()
+        }
+        if (!json.isNullOrBlank()) {
+            repo.importFromJson(json)
+            rescheduleBusAlarmWorker()
+            rescheduleStockAlarmWorker()
+            refresh()
+        }
+    }
 
     /** 버스카드 알람 on/off 및 임계값 저장. 활성 시 Worker 예약. */
     fun setBusAlarm(cardId: String, enabled: Boolean, minutesBefore: Int) = viewModelScope.launch {

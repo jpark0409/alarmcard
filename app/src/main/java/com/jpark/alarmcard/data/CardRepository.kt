@@ -189,6 +189,18 @@ class CardRepository @Inject constructor(
         runCatching { refreshCard(entity.toDomain()) }
     }
 
+    suspend fun exportToJson(): String {
+        val entities = dao.getAll()
+        val json = kotlinx.serialization.json.Json { prettyPrint = true }
+        return json.encodeToString(kotlinx.serialization.builtins.ListSerializer(com.jpark.alarmcard.data.local.CardEntity.serializer()), entities)
+    }
+
+    suspend fun importFromJson(jsonStr: String) {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val entities = json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(com.jpark.alarmcard.data.local.CardEntity.serializer()), jsonStr)
+        dao.upsertAll(entities)
+    }
+
     private suspend fun refreshCard(card: Card) {
         val now = System.currentTimeMillis()
         try {

@@ -1,5 +1,7 @@
 package com.jpark.alarmcard.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,14 +22,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,6 +89,20 @@ fun HomeScreen(
 
     val pullRefreshState = rememberPullToRefreshState()
 
+    var showMenu by remember { mutableStateOf(false) }
+
+    val createDocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { vm.exportCards(it) }
+    }
+
+    val openDocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { vm.importCards(it) }
+    }
+
     // 화면이 active(RESUMED) 될 때 자동 새로고침
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.onScreenResumed()
@@ -105,6 +124,30 @@ fun HomeScreen(
                             )
                         } else {
                             Icon(Icons.Filled.Refresh, contentDescription = "새로고침")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "설정")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("백업 (저장하기)") },
+                                onClick = {
+                                    showMenu = false
+                                    createDocLauncher.launch("alarmcard_backup.json")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("복원 (불러오기)") },
+                                onClick = {
+                                    showMenu = false
+                                    openDocLauncher.launch(arrayOf("application/json", "application/octet-stream"))
+                                }
+                            )
                         }
                     }
                 }

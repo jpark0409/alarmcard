@@ -9,6 +9,7 @@ import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
 import com.jpark.alarmcard.domain.model.StockMarket
 
+@kotlinx.serialization.Serializable
 @Entity(tableName = "cards")
 data class CardEntity(
     @PrimaryKey val id: String,
