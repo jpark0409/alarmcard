@@ -72,7 +72,6 @@ fun HomeScreen(
 ) {
     val cards by vm.cards.collectAsStateWithLifecycle()
     val refreshing by vm.isRefreshing.collectAsStateWithLifecycle()
-    val pullRefreshState = rememberPullToRefreshState()
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         val reorderedIds = cards.toMutableList().apply {
@@ -80,6 +79,8 @@ fun HomeScreen(
         }.map { it.id }
         vm.reorder(reorderedIds)
     }
+
+    val pullRefreshState = rememberPullToRefreshState()
 
     // 화면이 active(RESUMED) 될 때 자동 새로고침
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
