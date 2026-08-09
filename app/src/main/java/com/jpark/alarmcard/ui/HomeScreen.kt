@@ -58,7 +58,6 @@ import com.jpark.alarmcard.domain.model.Card as DomainCard
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
 import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.draggableHandle
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -134,7 +133,7 @@ fun HomeScreen(
                                 onSetBusAlarm = { enabled, minutes ->
                                     vm.setBusAlarm(c.id, enabled, minutes)
                                 },
-                                modifier = with(this) { Modifier.draggableHandle() },
+                                modifier = Modifier.longPressDraggableHandle(),
                                 isDragging = isDragging
                             )
                         }
