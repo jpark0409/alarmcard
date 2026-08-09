@@ -41,22 +41,32 @@ class YahooFinanceCrawler @Inject constructor() {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private val commonHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "application/json"
+    )
+
     suspend fun fetchQuote(symbol: String, market: StockMarket): StockQuote {
-        val url = "https://query1.finance.yahoo.com/v1/finance/quote?symbols=$symbol"
-        val response = httpGetString(url)
+        // v1/quote is 404, use v8/chart which provides similar info in 'meta'
+        val url = "https://query1.finance.yahoo.com/v8/finance/chart/$symbol?interval=1d&range=1d"
+        val response = httpGetString(url, extraHeaders = commonHeaders)
         
         return try {
             val root = json.parseToJsonElement(response).jsonObject
-            val result = root["quoteResponse"]?.jsonObject?.get("result")?.jsonArray?.get(0)?.jsonObject
+            val result = root["chart"]?.jsonObject?.get("result")?.jsonArray?.get(0)?.jsonObject
                 ?: error("No result found for symbol: $symbol")
+            val meta = result["meta"]?.jsonObject ?: error("No meta found for $symbol")
 
-            val name = result["longName"]?.jsonPrimitive?.content 
-                ?: result["shortName"]?.jsonPrimitive?.content 
+            val name = meta["longName"]?.jsonPrimitive?.content 
+                ?: meta["shortName"]?.jsonPrimitive?.content 
                 ?: symbol
-            val price = result["regularMarketPrice"]?.jsonPrimitive?.doubleOrNull
-            val change = result["regularMarketChange"]?.jsonPrimitive?.doubleOrNull
-            val changeRate = result["regularMarketChangePercent"]?.jsonPrimitive?.doubleOrNull
-            val currency = result["currency"]?.jsonPrimitive?.content
+            val price = meta["regularMarketPrice"]?.jsonPrimitive?.doubleOrNull
+            val prevClose = meta["chartPreviousClose"]?.jsonPrimitive?.doubleOrNull 
+                ?: meta["previousClose"]?.jsonPrimitive?.doubleOrNull
+
+            val change = if (price != null && prevClose != null) price - prevClose else null
+            val changeRate = if (change != null && prevClose != null && prevClose != 0.0) (change / prevClose) * 100.0 else null
+            val currency = meta["currency"]?.jsonPrimitive?.content
 
             StockQuote(symbol, name, price, change, changeRate, currency)
         } catch (e: Exception) {
@@ -69,27 +79,34 @@ class YahooFinanceCrawler @Inject constructor() {
         val trimmed = keyword.trim()
         if (trimmed.isBlank()) return emptyList()
 
-        val url = "https://query1.finance.yahoo.com/v1/finance/search?q=${trimmed}"
-        val response = httpGetString(url)
-
+        // Yahoo search API often fails (400) with non-ASCII characters like Korean.
+        // We need to encode the query properly.
+        val encodedQuery = java.net.URLEncoder.encode(trimmed, "UTF-8")
+        val url = "https://query1.finance.yahoo.com/v1/finance/search?q=$encodedQuery&quotesCount=10&newsCount=0"
+        
         return try {
+            val response = httpGetString(url, extraHeaders = commonHeaders)
             val root = json.parseToJsonElement(response).jsonObject
             val quotes = root["quotes"]?.jsonArray ?: return emptyList()
 
             quotes.mapNotNull { element ->
                 val obj = element.jsonObject
                 val symbol = obj["symbol"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val name = obj["longname"]?.jsonPrimitive?.content 
-                    ?: obj["shortname"]?.jsonPrimitive?.content 
-                    ?: symbol
-                val exchange = obj["exchange"]?.jsonPrimitive?.content
                 
-                // 야후 파이낸스 exchange 코드를 보고 국내/해외 구분 (간단하게)
-                val market = if (exchange == "KSC" || exchange == "KOE" || symbol.endsWith(".KS") || symbol.endsWith(".KQ")) {
-                    StockMarket.DOMESTIC
+                val exchange = obj["exchange"]?.jsonPrimitive?.content
+                val isKorean = exchange == "KSC" || exchange == "KOE" || symbol.endsWith(".KS") || symbol.endsWith(".KQ")
+                
+                val name = if (isKorean && !trimmed.all { it.code < 128 }) {
+                    // If searching with Korean and result is a Korean stock, 
+                    // prefer using the search keyword as name if the result name is just English.
+                    trimmed
                 } else {
-                    StockMarket.US
+                    obj["longname"]?.jsonPrimitive?.content 
+                        ?: obj["shortname"]?.jsonPrimitive?.content 
+                        ?: symbol
                 }
+                
+                val market = if (isKorean) StockMarket.DOMESTIC else StockMarket.US
 
                 StockSearchResult(
                     symbol = symbol,
@@ -100,6 +117,19 @@ class YahooFinanceCrawler @Inject constructor() {
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to search stocks for $keyword")
+            
+            // Fallback: If search fails (likely due to Korean query), 
+            // and the keyword looks like a symbol (e.g. 005930.KS), try to return it directly.
+            if (trimmed.contains(".") || trimmed.all { it.isDigit() }) {
+                val symbol = if (trimmed.all { it.isDigit() }) "$trimmed.KS" else trimmed
+                return listOf(
+                    StockSearchResult(
+                        symbol = symbol,
+                        name = trimmed,
+                        market = if (symbol.endsWith(".KS") || symbol.endsWith(".KQ")) StockMarket.DOMESTIC else StockMarket.US
+                    )
+                )
+            }
             emptyList()
         }
     }
