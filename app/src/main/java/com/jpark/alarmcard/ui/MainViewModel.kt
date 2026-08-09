@@ -9,7 +9,7 @@ import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
-import com.jpark.alarmcard.data.crawler.NaverStockCrawler
+import com.jpark.alarmcard.data.crawler.YahooFinanceCrawler
 import com.jpark.alarmcard.data.crawler.StockSearchResult
 import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card
@@ -32,7 +32,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     app: Application,
     private val repo: CardRepository,
-    private val stockCrawler: NaverStockCrawler,
+    private val stockCrawler: YahooFinanceCrawler,
     private val fxCrawler: NaverFxCrawler,
     private val busCrawler: NaverMapBusCrawler
 ) : AndroidViewModel(app) {

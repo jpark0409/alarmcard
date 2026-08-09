@@ -95,18 +95,17 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
 
     Column(Modifier.padding(12.dp)) {
         Text(
-            "네이버 금융 종목 URL 또는 6자리 종목코드를 입력하세요.",
+            "야후 파이낸스 종목명 또는 티커를 입력하세요.",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "예) https://finance.naver.com/item/main.naver?code=005930\n" +
-                "또는 코드만: 005930",
+            "예) 삼성전자, Apple, AAPL, 005930.KS",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(6.dp))
-        SearchBar(q, "네이버 금융 URL 또는 종목코드") { q = it }
+        SearchBar(q, "종목명 또는 티커 검색") { q = it }
         Button(
             onClick = {
                 scope.launch {
@@ -114,7 +113,7 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
                     errorMsg = null
                     results = runCatching { vm.searchStocks(q) }.getOrDefault(emptyList())
                     if (results.isEmpty()) {
-                        errorMsg = "URL 또는 코드를 인식하지 못했거나, 정보를 가져오지 못했습니다."
+                        errorMsg = "검색 결과가 없습니다."
                     }
                     loading = false
                 }
@@ -122,7 +121,7 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
             enabled = q.isNotBlank() && !loading,
             modifier = Modifier.padding(top = 8.dp)
         ) {
-            Text(if (loading) "확인 중..." else "종목 확인")
+            Text(if (loading) "검색 중..." else "종목 검색")
         }
 
         errorMsg?.let {
@@ -132,14 +131,10 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(results, key = { it.symbol + it.market }) { r ->
-                val priceLine = r.price?.let { p ->
-                    val chg = r.change?.let { c -> " (${if (c >= 0) "+" else ""}${c.toLong()})" } ?: ""
-                    "현재가 ${"%,d".format(p.toLong())}$chg"
-                } ?: "가격 정보 없음"
+            items(results, key = { it.symbol }) { r ->
                 ResultRow(
                     title = r.name,
-                    subtitle = "${r.symbol}  ·  ${if (r.market == StockMarket.DOMESTIC) "국내" else "해외"}\n$priceLine",
+                    subtitle = "${r.symbol} (${r.exchange ?: ""}) · ${if (r.market == StockMarket.DOMESTIC) "국내" else "해외"}",
                     onClick = {
                         vm.addStock(r); onBack()
                     }

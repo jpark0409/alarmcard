@@ -105,4 +105,6 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.work.runtime.ktx)
     implementation(libs.reorderable)
+
+    testImplementation("junit:junit:4.13.2")
 }

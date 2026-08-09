@@ -20,7 +20,8 @@
 7. **알림 자동 활성화**: 주 단위(요일) 및 특정 시각에 알림을 자동으로 켜주는 기능 (WorkManager 기반, 앱 종료 시에도 동작 보장)
 
 ### 데이터 소스
-- **주식/환율**: 네이버 증권 모바일 페이지 크롤링 (`__NEXT_DATA__` JSON 파싱 우선, CSS 셀렉터 Fallback)
+- **주식**: 야후 파이낸스 API (Search/Quote API 사용)
+- **환율**: 네이버 증권 모바일 페이지 크롤링 (`__NEXT_DATA__` JSON 파싱 우선, CSS 셀렉터 Fallback)
 - **버스**: 네이버 지도 대중교통 XHR 엔드포인트
 
 ---
@@ -44,7 +45,7 @@ app/src/main/java/com/jpark/alarmcard/
 │   │   ├── JsonExt.kt                 # 직렬화 확장 함수
 │   │   └── NextData.kt                # __NEXT_DATA__ JSON 파싱
 │   ├── crawler/
-│   │   ├── NaverStockCrawler.kt        # 주식 시세 크롤러 (국내/해외/지수 지원)
+│   │   ├── YahooFinanceCrawler.kt      # 주식 시세 크롤러 (야후 파이낸스 API 기반)
 │   │   ├── NaverFxCrawler.kt           # 환율 크롤러
 │   │   └── NaverMapBusCrawler.kt       # 버스 도착정보 크롤러
 │   └── CardRepository.kt              # 데이터 레이어 Facade (병렬 새로고침, 카드 CRUD, 알림 로직)
@@ -97,7 +98,7 @@ CardRepository.refreshAll() (또는 refreshOne)
 coroutineScope { cards.map { async { refreshCard(card) } } } (병렬 실행)
   ↓
 각 카드 타입별 크롤러 호출:
-  - StockCard → NaverStockCrawler.fetchQuote() (해외/지수 여부에 따라 URL 분기)
+  - StockCard → YahooFinanceCrawler.fetchQuote() (야후 파이낸스 API 기반)
   - FxCard → NaverFxCrawler.fetchQuote()
   - BusCard → NaverMapBusCrawler.fetchArrivals()
   ↓
@@ -115,7 +116,7 @@ StateFlow 구독자들에게 변경 알림 (HomeScreen 자동 업데이트)
 ```
 AddCardScreen (검색 UI)
   ↓
-MainViewModel.searchStocks(q) → NaverStockCrawler.search() (심볼 및 URL 파싱)
+MainViewModel.searchStocks(q) → YahooFinanceCrawler.search() (야후 파이낸스 Search API)
   ↓
 사용자 선택 (StockSearchResult)
   ↓
