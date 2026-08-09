@@ -56,6 +56,8 @@ class CardRepository @Inject constructor(
 
     suspend fun remove(id: String) = dao.deleteById(id)
 
+    suspend fun getCardById(id: String) = dao.getById(id)
+
     /** 버스카드 알람 설정 갱신 */
     suspend fun setBusAlarm(id: String, enabled: Boolean, minutesBefore: Int) {
         val entity = dao.getById(id) ?: return

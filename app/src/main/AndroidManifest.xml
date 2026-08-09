@@ -30,6 +30,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Alarm Dismiss Receiver -->
+        <receiver
+            android:name=".notify.AlarmDismissReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.jpark.alarmcard.ACTION_DISMISS_ALARM" />
+            </intent-filter>
+        </receiver>
+
         <!-- WorkManager: on-demand initialization to allow custom Configuration.Provider -->
         <provider
             android:name="androidx.startup.InitializationProvider"

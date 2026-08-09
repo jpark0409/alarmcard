@@ -138,28 +138,50 @@ jobs:
             gradle wrapper --gradle-version 8.9 --distribution-type bin
           fi
           chmod +x ./gradlew
-      
+
       - name: Build Release APK (unsigned)
         run: ./gradlew assembleRelease --no-daemon --stacktrace
-      
+
       - name: Find Release APK
         id: find_apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "Searching for release APK..."
+          ls -la app/build/outputs/apk/release/ || echo "Release directory not found"
+          
+          APK_PATH=$(find app/build/outputs/apk/release -type f -name "*.apk" 2>/dev/null | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: Release APK not found!" >&2
+            echo "Searching all APK files:" >&2
+            find app/build/outputs/apk -type f -name "*.apk" 2>/dev/null || echo "No APK files found"
+            exit 1
+          fi
+          
           echo "Found APK: $APK_PATH"
-      
+          ls -lh "$APK_PATH"
+          file "$APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Verify APK integrity
+        run: |
+          if [ ! -f "${{ steps.find_apk.outputs.apk_path }}" ]; then
+            echo "ERROR: APK file does not exist: ${{ steps.find_apk.outputs.apk_path }}" >&2
+            exit 1
+          fi
+          echo "APK verified successfully"
+
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
           retention-days: 30
-      
+          if-no-files-found: error
+
       - name: Upload Release APK to Release
         uses: softprops/action-gh-release@v2
         if: steps.find_apk.outputs.apk_path != ''
         with:
           files: ${{ steps.find_apk.outputs.apk_path }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

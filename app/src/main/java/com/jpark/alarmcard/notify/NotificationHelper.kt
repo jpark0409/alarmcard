@@ -12,6 +12,8 @@ import com.jpark.alarmcard.domain.model.BusCard
 
 object NotificationHelper {
     const val CHANNEL_BUS_ALARM = "bus_alarm"
+    const val ACTION_DISMISS_ALARM = "com.jpark.alarmcard.ACTION_DISMISS_ALARM"
+    const val EXTRA_CARD_ID = "card_id"
 
     fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -49,6 +51,18 @@ object NotificationHelper {
             )
         } else null
 
+        // 알림 끄기 버튼 클릭 시 처리할 Intent
+        val dismissIntent = Intent(ctx, AlarmDismissReceiver::class.java).apply {
+            action = ACTION_DISMISS_ALARM
+            putExtra(EXTRA_CARD_ID, card.id)
+        }
+        val dismissPi = PendingIntent.getBroadcast(
+            ctx,
+            card.id.hashCode() + 1000,
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(ctx, CHANNEL_BUS_ALARM)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentTitle("$routeNo 번 도착 임박")
@@ -59,6 +73,11 @@ object NotificationHelper {
             .setVibrate(longArrayOf(0, 300, 200, 300))
             .setDefaults(NotificationCompat.DEFAULT_SOUND)
             .apply { if (pi != null) setContentIntent(pi) }
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "알람 끄기",
+                dismissPi
+            )
             .build()
 
         val nm = ContextCompat.getSystemService(ctx, NotificationManager::class.java) ?: return

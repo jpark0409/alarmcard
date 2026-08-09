@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
@@ -35,7 +36,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -54,6 +59,10 @@ import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card as DomainCard
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
+import org.burnoutcrew.reorderable.ReorderableItem
+import org.burnoutcrew.reorderable.detectReorderAfterLongPress
+import org.burnoutcrew.reorderable.rememberReorderableLazyListState
+import org.burnoutcrew.reorderable.reorderable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -66,10 +75,19 @@ fun HomeScreen(
 ) {
     val cards by vm.cards.collectAsStateWithLifecycle()
     val refreshing by vm.isRefreshing.collectAsStateWithLifecycle()
+    val pullRefreshState = rememberPullToRefreshState()
 
     // 화면이 active(RESUMED) 될 때 자동 새로고침
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.onScreenResumed()
+    }
+
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
+            pullRefreshState.startRefresh()
+        } else {
+            pullRefreshState.endRefresh()
+        }
     }
 
     Scaffold(
@@ -94,24 +112,51 @@ fun HomeScreen(
             )
         }
     ) { inner ->
-        if (cards.isEmpty()) {
-            EmptyState(inner)
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(inner),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(cards, key = { it.id }) { c ->
-                    CardItem(
-                        card = c,
-                        onDelete = { vm.deleteCard(c.id) },
-                        onSetBusAlarm = { enabled, minutes ->
-                            vm.setBusAlarm(c.id, enabled, minutes)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(pullRefreshState.nestedScrollConnection)
+        ) {
+            if (cards.isEmpty()) {
+                EmptyState(inner)
+            } else {
+                val reorderState = rememberReorderableLazyListState(onMove = { from, to ->
+                    val reorderedIds = cards.toMutableList().apply {
+                        add(to.index, removeAt(from.index))
+                    }.map { it.id }
+                    vm.reorder(reorderedIds)
+                })
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(inner)
+                        .reorderable(reorderState)
+                        .detectReorderAfterLongPress(reorderState),
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    state = reorderState.listState
+                ) {
+                    items(cards, key = { it.id }) { c ->
+                        ReorderableItem(reorderState, key = c.id) { isDragging ->
+                            CardItem(
+                                card = c,
+                                onDelete = { vm.deleteCard(c.id) },
+                                onSetBusAlarm = { enabled, minutes ->
+                                    vm.setBusAlarm(c.id, enabled, minutes)
+                                },
+                                isDragging = isDragging
+                            )
                         }
-                    )
+                    }
                 }
             }
+
+            PullToRefreshContainer(
+                modifier = Modifier.align(Alignment.TopCenter),
+                state = pullRefreshState,
+                onRefresh = { vm.refresh() }
+            )
         }
     }
 }
@@ -133,64 +178,88 @@ private fun EmptyState(pv: PaddingValues) {
 fun CardItem(
     card: DomainCard,
     onDelete: () -> Unit,
-    onSetBusAlarm: (Boolean, Int) -> Unit
+    onSetBusAlarm: (Boolean, Int) -> Unit,
+    isDragging: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp),
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 첫 번째 줄: 타입, 제목, 알람 아이콘, 삭제 버튼
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TypeBadge(card)
-                Spacer(Modifier.size(8.dp))
-                Text(cardTitle(card), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.weight(1f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    TypeBadge(card)
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        cardTitle(card),
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 // 버스카드에만 종 아이콘
                 if (card is BusCard) {
-                    IconButton(onClick = {
-                        if (card.alarmEnabled) {
-                            // 이미 켜져있으면 바로 끔 (탭 한번으로 토글)
-                            onSetBusAlarm(false, card.alarmMinutesBefore)
-                        } else {
-                            showAlarmDialog = true
-                        }
-                    }) {
-                        if (card.alarmEnabled) {
-                            Icon(
-                                Icons.Filled.Notifications,
-                                contentDescription = "알람 켜짐",
-                                tint = Color(0xFFF9A825)
-                            )
-                        } else {
-                            Icon(
-                                Icons.Outlined.Notifications,
-                                contentDescription = "알람 설정",
-                                tint = Color.Gray
-                            )
-                        }
+                    IconButton(
+                        onClick = {
+                            if (card.alarmEnabled) {
+                                onSetBusAlarm(false, card.alarmMinutesBefore)
+                            } else {
+                                showAlarmDialog = true
+                            }
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                            contentDescription = if (card.alarmEnabled) "알람 끄기" else "알람 설정",
+                            tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "삭제")
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "삭제",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
-            Spacer(Modifier.height(6.dp))
+
+            // 두 번째 줄: 본문 데이터
             when (card) {
-                is StockCard -> StockBody(card)
-                is FxCard -> FxBody(card)
-                is BusCard -> BusBody(card)
+                is StockCard -> StockBodyCompact(card)
+                is FxCard -> FxBodyCompact(card)
+                is BusCard -> BusBodyCompact(card)
             }
-            Spacer(Modifier.height(6.dp))
+
+            // 세 번째 줄: 푸터 (시간 + 에러)
             Text(
                 text = footerText(card),
-                fontSize = 11.sp,
-                color = Color.Gray
+                fontSize = 10.sp,
+                color = Color.Gray,
+                maxLines = 1
             )
         }
     }
@@ -258,6 +327,33 @@ private fun TypeBadge(c: DomainCard) {
 }
 
 @Composable
+private fun StockBodyCompact(c: StockCard) {
+    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = c.price?.let { fmtPrice(it, c.currency) } ?: "—",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.size(8.dp))
+        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
+        Text(
+            text = buildString {
+                if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + fmtPrice(kotlin.math.abs(c.change), c.currency))
+                if (c.changeRate != null) append("  " + String.format("%.2f%%", c.changeRate))
+                if (c.change == null && c.changeRate == null) append("변동")
+            },
+            color = chgColor,
+            fontSize = 12.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.size(6.dp))
+        Text(c.symbol, fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+    }
+}
+
+@Composable
 private fun StockBody(c: StockCard) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(
@@ -281,6 +377,32 @@ private fun StockBody(c: StockCard) {
 }
 
 @Composable
+private fun FxBodyCompact(c: FxCard) {
+    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = c.rate?.let { String.format("%,.2f", it) } ?: "—",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.size(8.dp))
+        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
+        Text(
+            text = buildString {
+                if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + String.format("%.2f", kotlin.math.abs(c.change)))
+                if (c.changeRate != null) append("  " + String.format("%.2f%%", c.changeRate))
+            },
+            color = chgColor,
+            fontSize = 12.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.size(6.dp))
+        Text("${c.base}→${c.quote}", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+    }
+}
+
+@Composable
 private fun FxBody(c: FxCard) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(
@@ -300,6 +422,42 @@ private fun FxBody(c: FxCard) {
         )
     }
     Text("${c.base} → ${c.quote}", fontSize = 12.sp, color = Color.Gray)
+}
+
+@Composable
+private fun BusBodyCompact(c: BusCard) {
+    if (c.arrivals.isEmpty()) {
+        Text("도착 정보 없음", color = Color.Gray, fontSize = 12.sp)
+    } else {
+        // 첫 번째 도착만 표시
+        val a = c.arrivals.firstOrNull()
+        if (a != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    a.routeNo,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    modifier = Modifier.width(50.dp)
+                )
+                Text(
+                    fmtEta(a.eta1Sec, a.remainStops1),
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (a.eta2Sec != null) {
+                    Text(
+                        " | ${fmtEta(a.eta2Sec, a.remainStops2)}",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

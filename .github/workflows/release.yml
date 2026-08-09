@@ -59,15 +59,25 @@ jobs:
         id: apk
         run: |
           set -e
-          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n1)
+          echo "Searching for debug APK in app/build/outputs/apk/debug..."
+          ls -la app/build/outputs/apk/debug/ || echo "Directory not found"
+          
+          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" 2>/dev/null | head -n1)
           if [ -z "$APK" ]; then
-            echo "APK not found!" >&2
+            echo "ERROR: APK not found in app/build/outputs/apk/debug!" >&2
+            echo "Available APK files:" >&2
+            find app/build/outputs/apk -type f -name "*.apk" 2>/dev/null || true
             exit 1
           fi
+          
+          echo "Found APK: $APK"
+          ls -lh "$APK"
+          
           # 파일명 통일 (링크가 항상 같은 이름이도록)
           cp "$APK" alarmcard-debug.apk
           echo "path=alarmcard-debug.apk" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Successfully built APK: alarmcard-debug.apk"
 
       # 태그 push (v*) 인 경우: 해당 태그로 정식 릴리즈
       - name: Publish tagged release
@@ -79,6 +89,16 @@ jobs:
           generate_release_notes: true
 
       # main 브랜치 push 인 경우: 'latest' 라는 rolling release 를 갱신
+      - name: Verify APK exists before release
+        run: |
+          if [ ! -f "alarmcard-debug.apk" ]; then
+            echo "ERROR: alarmcard-debug.apk not found!" >&2
+            ls -la *.apk 2>/dev/null || echo "No APK files in workspace root"
+            exit 1
+          fi
+          ls -lh alarmcard-debug.apk
+          file alarmcard-debug.apk
+
       - name: Publish rolling 'latest' release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -94,7 +114,7 @@ jobs:
             폰(안드로이드) 에서 아래 링크를 눌러 바로 설치하세요:
             https://github.com/${{ github.repository }}/releases/latest/download/alarmcard-debug.apk
 
-            > 설치 시 “출처를 알 수 없는 앱 설치 허용” 이 필요할 수 있습니다.
+            > 설치 시 "출처를 알 수 없는 앱 설치 허용" 이 필요할 수 있습니다.
           files: alarmcard-debug.apk
           fail_on_unmatched_files: true
           prerelease: true
