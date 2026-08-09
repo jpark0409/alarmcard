@@ -175,81 +175,96 @@ fun CardItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(96.dp),
-        shape = RoundedCornerShape(14.dp),
+            .height(80.dp),
+        shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(if (isActive) 8.dp else 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            // 첫 번째 줄: 타입, 제목, 알람 아이콘, 삭제 버튼
+            // 첫 번째 줄: [타입] 역명/제목 + 노선번호(버스) | [아이콘들]
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TypeBadge(card)
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    cardTitle(card),
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                if (card is BusCard && card.arrivals.firstOrNull() != null) {
+                    Text(
+                        card.arrivals.first().routeNo,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEB6100),
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (card is BusCard) {
+                        IconButton(
+                            onClick = {
+                                if (card.alarmEnabled) {
+                                    onSetBusAlarm(false, card.alarmMinutesBefore)
+                                } else {
+                                    showAlarmDialog = true
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = "삭제",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // 두 번째 줄: 도착정보/가격정보 + 갱신시각
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    TypeBadge(card)
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        cardTitle(card),
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // 버스카드에만 종 아이콘
-                if (card is BusCard) {
-                    IconButton(
-                        onClick = {
-                            if (card.alarmEnabled) {
-                                onSetBusAlarm(false, card.alarmMinutesBefore)
-                            } else {
-                                showAlarmDialog = true
-                            }
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
-                            contentDescription = if (card.alarmEnabled) "알람 끄기" else "알람 설정",
-                            tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
-                            modifier = Modifier.size(18.dp)
-                        )
+                Box(modifier = Modifier.weight(1f)) {
+                    when (card) {
+                        is StockCard -> StockBodyCompact(card)
+                        is FxCard -> FxBodyCompact(card)
+                        is BusCard -> BusBodyCompact(card)
                     }
                 }
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "삭제",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Text(
+                    text = footerText(card),
+                    fontSize = 10.sp,
+                    color = Color.LightGray,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
-
-            // 두 번째 줄: 본문 데이터
-            when (card) {
-                is StockCard -> StockBodyCompact(card)
-                is FxCard -> FxBodyCompact(card)
-                is BusCard -> BusBodyCompact(card)
-            }
-
-            // 세 번째 줄: 푸터 (시간 + 에러)
-            Text(
-                text = footerText(card),
-                fontSize = 10.sp,
-                color = Color.Gray,
-                maxLines = 1
-            )
         }
     }
 
@@ -370,35 +385,22 @@ private fun FxBodyCompact(c: FxCard) {
 
 @Composable
 private fun BusBodyCompact(c: BusCard) {
-    if (c.arrivals.isEmpty()) {
+    val a = c.arrivals.firstOrNull()
+    if (a == null) {
         Text("도착 정보 없음", color = Color.Gray, fontSize = 12.sp)
     } else {
-        // 첫 번째 도착만 표시
-        val a = c.arrivals.firstOrNull()
-        if (a != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                fmtEta(a.eta1Sec, a.remainStops1),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (a.eta2Sec != null) {
                 Text(
-                    a.routeNo,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    modifier = Modifier.width(50.dp)
+                    "  [다음: ${fmtEta(a.eta2Sec, a.remainStops2)}]",
+                    fontSize = 11.sp,
+                    color = Color.Gray
                 )
-                Text(
-                    fmtEta(a.eta1Sec, a.remainStops1),
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                if (a.eta2Sec != null) {
-                    Text(
-                        " | ${fmtEta(a.eta2Sec, a.remainStops2)}",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        maxLines = 1
-                    )
-                }
             }
         }
     }
