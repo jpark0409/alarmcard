@@ -201,8 +201,12 @@ class NaverStockCrawler @Inject constructor() {
                 val looksLikeStock = keys.contains("closePrice") ||
                     keys.contains("nowPrice") ||
                     keys.contains("currentPrice") ||
-                    (keys.contains("stockName") && (keys.contains("compareToPreviousClosePrice") || keys.contains("fluctuationsRatio")))
-                if (looksLikeStock) return cur
+                    (keys.contains("stockName") && (keys.contains("compareToPreviousClosePrice") || keys.contains("fluctuationsRatio"))) ||
+                    (keys.contains("itemCode") && (keys.contains("closePrice") || keys.contains("nowPrice")))
+                
+                if (looksLikeStock) {
+                    return cur
+                }
                 cur.values.forEach { stack.addLast(it) }
             } else if (cur is kotlinx.serialization.json.JsonArray) {
                 cur.forEach { stack.addLast(it) }
