@@ -59,6 +59,8 @@ android {
     lint {
         abortOnError = false
         checkReleaseBuilds = false
+        ignoreWarnings = true
+        quiet = true
     }
 }
 

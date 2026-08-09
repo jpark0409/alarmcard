@@ -126,7 +126,7 @@ fun HomeScreen(
                     state = lazyListState
                 ) {
                     items(cards, key = { it.id }) { c ->
-                        ReorderableItem(reorderState, key = c.id) { isDragging ->
+                        ReorderableItem(reorderState, key = c.id) {
                             CardItem(
                                 card = c,
                                 onDelete = { vm.deleteCard(c.id) },
