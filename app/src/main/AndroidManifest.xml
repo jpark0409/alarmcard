@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Doze/절전 상태에서도 잘 발송되도록 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:name=".AlarmCardApp"
@@ -36,6 +38,14 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.jpark.alarmcard.ACTION_DISMISS_ALARM" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".notify.AutoEnableReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

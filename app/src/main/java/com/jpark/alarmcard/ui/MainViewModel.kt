@@ -15,6 +15,7 @@ import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
+import com.jpark.alarmcard.notify.AutoEnableReceiver
 import com.jpark.alarmcard.notify.BusAlarmWorker
 import com.jpark.alarmcard.notify.StockAlarmWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -102,6 +103,16 @@ class MainViewModel @Inject constructor(
     fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) = viewModelScope.launch {
         repo.setStockAlarm(id, enabled, price, rate)
         rescheduleStockAlarmWorker()
+    }
+
+    fun setAutoEnable(id: String, enabled: Boolean, days: Int, time: String?) = viewModelScope.launch {
+        repo.setAutoEnable(id, enabled, days, time)
+        val entity = repo.getCardById(id) ?: return@launch
+        if (enabled) {
+            AutoEnableReceiver.scheduleNext(getApplication(), entity)
+        } else {
+            AutoEnableReceiver.cancel(getApplication(), id)
+        }
     }
 
     private suspend fun rescheduleStockAlarmWorker() {

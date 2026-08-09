@@ -12,6 +12,9 @@ sealed interface Card {
     val order: Int
     val updatedAt: Long
     val lastError: String?
+    val autoEnabled: Boolean
+    val autoEnableDays: Int // Bitmask: 1 << 1 (Mon) ... 1 << 7 (Sun)
+    val autoEnableTime: String? // "HH:mm"
 }
 
 /** 주식 시장 구분. 네이버 증권의 URL 규칙에 매핑됨. */
@@ -22,6 +25,9 @@ data class StockCard(
     override val order: Int,
     override val updatedAt: Long,
     override val lastError: String?,
+    override val autoEnabled: Boolean = false,
+    override val autoEnableDays: Int = 0,
+    override val autoEnableTime: String? = null,
     val symbol: String,          // 국내: 6자리 코드 / 해외: AAPL.O 같은 심볼
     val market: StockMarket,
     val name: String,
@@ -50,6 +56,9 @@ data class BusCard(
     override val order: Int,
     override val updatedAt: Long,
     override val lastError: String?,
+    override val autoEnabled: Boolean = false,
+    override val autoEnableDays: Int = 0,
+    override val autoEnableTime: String? = null,
     val stationId: String,
     val stationName: String,
     val cityCode: String? = null, // 서울/경기 구분용 (선택)
@@ -69,6 +78,9 @@ data class FxCard(
     override val order: Int,
     override val updatedAt: Long,
     override val lastError: String?,
+    override val autoEnabled: Boolean = false,
+    override val autoEnableDays: Int = 0,
+    override val autoEnableTime: String? = null,
     val code: String,       // FX_USDKRW 형태
     val base: String,       // USD
     val quote: String,      // KRW

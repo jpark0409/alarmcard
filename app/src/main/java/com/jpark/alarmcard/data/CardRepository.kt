@@ -97,6 +97,17 @@ class CardRepository @Inject constructor(
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled
         }
 
+    suspend fun setAutoEnable(id: String, enabled: Boolean, days: Int, time: String?) {
+        val entity = dao.getById(id) ?: return
+        dao.upsert(
+            entity.copy(
+                autoEnabled = enabled,
+                autoEnableDays = days,
+                autoEnableTime = time
+            )
+        )
+    }
+
     suspend fun refreshStockAlarmsAndSelectFireable(): List<StockCard> {
         val entities = dao.getAll().filter {
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled

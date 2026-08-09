@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -39,11 +41,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -182,6 +187,9 @@ fun HomeScreen(
                                 onSetStockAlarm = { enabled, price, rate ->
                                     vm.setStockAlarm(c.id, enabled, price, rate)
                                 },
+                                onSetAutoEnable = { enabled, days, time ->
+                                    vm.setAutoEnable(c.id, enabled, days, time)
+                                },
                                 modifier = Modifier.longPressDraggableHandle(
                                     onDragStarted = { activeId = c.id },
                                     onDragStopped = { activeId = null }
@@ -216,11 +224,13 @@ fun CardItem(
     onDelete: () -> Unit,
     onSetBusAlarm: (Boolean, Int) -> Unit,
     onSetStockAlarm: (Boolean, Double?, Double?) -> Unit,
+    onSetAutoEnable: (Boolean, Int, String?) -> Unit,
     modifier: Modifier = Modifier,
     isActive: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
     var showStockAlarmDialog by remember { mutableStateOf(false) }
+    var showAutoEnableDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -302,6 +312,19 @@ fun CardItem(
                             )
                         }
                     }
+                    if (card is StockCard || card is BusCard) {
+                        IconButton(
+                            onClick = { showAutoEnableDialog = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = "자동 활성 설정",
+                                tint = if (card.autoEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(28.dp)
@@ -358,6 +381,17 @@ fun CardItem(
             onConfirm = { price, rate ->
                 showStockAlarmDialog = false
                 onSetStockAlarm(true, price, rate)
+            }
+        )
+    }
+
+    if (showAutoEnableDialog && (card is StockCard || card is BusCard)) {
+        AutoEnableSetupDialog(
+            card = card,
+            onDismiss = { showAutoEnableDialog = false },
+            onConfirm = { enabled, days, time ->
+                showAutoEnableDialog = false
+                onSetAutoEnable(enabled, days, time)
             }
         )
     }
@@ -577,4 +611,97 @@ private fun cardTitle(c: DomainCard): String = when (c) {
 private fun footerText(c: DomainCard): String {
     val time = if (c.updatedAt == 0L) "아직 갱신 전" else "갱신 " + SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(c.updatedAt))
     return c.lastError?.let { "⚠ $it · $time" } ?: time
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AutoEnableSetupDialog(
+    card: DomainCard,
+    onDismiss: () -> Unit,
+    onConfirm: (Boolean, Int, String?) -> Unit
+) {
+    var enabled by remember { mutableStateOf(card.autoEnabled) }
+    var selectedDays by remember { mutableStateOf(card.autoEnableDays) }
+    val initialTime = card.autoEnableTime?.split(":") ?: listOf("08", "00")
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialTime[0].toInt(),
+        initialMinute = initialTime[1].toInt()
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("자동 활성화 설정") },
+        text = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("자동 활성화 사용", modifier = Modifier.weight(1f))
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                
+                Spacer(Modifier.height(16.dp))
+                Text("반복 요일", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val days = listOf("월", "화", "수", "목", "금", "토", "일")
+                    days.forEachIndexed { index, day ->
+                        val dayBit = 1 shl (index + 1)
+                        val isSelected = (selectedDays and dayBit) != 0
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .clickable {
+                                    selectedDays = if (isSelected) {
+                                        selectedDays and dayBit.inv()
+                                    } else {
+                                        selectedDays or dayBit
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                day,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Text("활성화 시각", style = MaterialTheme.typography.labelMedium)
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TimePicker(state = timePickerState)
+                }
+
+                if (card is BusCard) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("조건: ${card.alarmMinutesBefore}분 전 도착 알림", style = MaterialTheme.typography.bodySmall)
+                } else if (card is StockCard) {
+                    val cond = if (card.alarmPriceThreshold != null) "${card.alarmPriceThreshold}원 도달"
+                              else if (card.alarmRateThreshold != null) "${card.alarmRateThreshold}% 변동"
+                              else "설정된 조건 없음"
+                    Spacer(Modifier.height(8.dp))
+                    Text("조건: $cond", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val timeStr = String.format("%02d:%02d", timePickerState.hour, timePickerState.minute)
+                onConfirm(enabled, selectedDays, timeStr)
+            }) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
 }
