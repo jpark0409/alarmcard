@@ -1,0 +1,18 @@
+﻿RUN 31296555903 Release APK e532149 completed failure
+  JOB Build and publish APK completed failure
+RUN 31296555876 Android CI e532149 completed failure
+  JOB Lint Check completed failure
+  JOB Build and Test completed failure
+  JOB Build Release APK completed skipped
+RUN 31296055382 Android CI 942c137 completed failure
+  JOB Lint Check completed failure
+  JOB Build and Test completed failure
+  JOB Build Release APK completed skipped
+RUN 31296055360 Release APK 942c137 completed failure
+  JOB Build and publish APK completed failure
+RUN 31295877305 Release APK d59be4a completed failure
+  JOB Build and publish APK completed failure
+RUN 31295877292 Android CI d59be4a completed failure
+  JOB Build and Test completed failure
+  JOB Lint Check completed failure
+  JOB Build Release APK completed skipped
