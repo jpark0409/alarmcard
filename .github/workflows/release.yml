@@ -42,7 +42,7 @@ jobs:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Ensure Gradle wrapper exists
         run: |
@@ -78,6 +78,13 @@ jobs:
           echo "path=alarmcard-debug.apk" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "Successfully built APK: alarmcard-debug.apk"
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alarmcard-debug-apk
+          path: alarmcard-debug.apk
+          retention-days: 7
 
       # 태그 push (v*) 인 경우: 해당 태그로 정식 릴리즈
       - name: Publish tagged release
