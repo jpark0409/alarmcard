@@ -17,7 +17,7 @@
 4. **카드 관리**: 카드 추가/삭제/재정렬, 병렬 새로고침, 자동 갱신(화면 활성화 시)
 5. **버스 알림**: 도착 N분 전 알림 설정 (WorkManager 기반)
 6. **주식 알림**: 특정 가격 도달 또는 변동률 임계치 도달 시 알림 (WorkManager 기반)
-7. **알림 자동 활성화**: 주 단위(요일) 및 특정 시각에 알림을 자동으로 켜주는 기능 (AlarmManager & BroadcastReceiver 기반)
+7. **알림 자동 활성화**: 주 단위(요일) 및 특정 시각에 알림을 자동으로 켜주는 기능 (WorkManager 기반, 앱 종료 시에도 동작 보장)
 
 ### 데이터 소스
 - **주식/환율**: 네이버 증권 모바일 페이지 크롤링 (`__NEXT_DATA__` JSON 파싱 우선, CSS 셀렉터 Fallback)
@@ -53,7 +53,8 @@ app/src/main/java/com/jpark/alarmcard/
 ├── notify/
 │   ├── BusAlarmWorker.kt              # WorkManager 기반 버스 알림 Worker
 │   ├── StockAlarmWorker.kt            # WorkManager 기반 주식 알림 Worker
-│   ├── AutoEnableReceiver.kt          # 요일/시간별 알림 자동 활성 처리 (AlarmManager)
+│   ├── AutoEnableWorker.kt            # WorkManager 기반 알림 자동 활성화 Worker
+│   ├── AutoEnableReceiver.kt          # 부팅 시 알림 자동 활성 스케줄 복구 Receiver
 │   ├── NotificationHelper.kt          # 채널 설정 및 알림 발송 유틸
 │   └── AlarmDismissReceiver.kt        # 알림창에서 알림 해제 처리 (버스/주식 공통)
 └── ui/
@@ -220,11 +221,12 @@ MainViewModel.setAutoEnable(id, enabled, days, time)
   ↓
 CardRepository.setAutoEnable() → DB 저장
   ↓
-AutoEnableReceiver.scheduleNext() → AlarmManager 등록
+AutoEnableWorker.scheduleNext() → WorkManager 등록 (OneTimeWorkRequest + InitialDelay)
   ↓
-지정된 시각에 AutoEnableReceiver.onReceive() 실행
+지정된 시각에 AutoEnableWorker.doWork() 실행
   ├─ 현재 요일 체크
-  └─ 요일 일치 시 repository.setBusAlarm() 또는 setStockAlarm() 호출하여 활성화
+  ├─ 요일 일치 시 repository.setBusAlarm() 또는 setStockAlarm() 호출하여 활성화
+  └─ 다음 실행을 위해 scheduleNext() 재귀 호출
 ```
 
 ---
@@ -253,7 +255,9 @@ Card (sealed interface)
 - `refreshAll()`: 모든 카드 병렬 갱신
 - `setBusAlarm()` / `setStockAlarm()`: 알림 설정 저장
 - `refreshBusAlarmsAndSelectFireable()`: 버스 알림 대상 추출
-- `refreshStockAlarmsAndSelectFireable()`: 주식 알림 대상 추출
+  - `refreshStockAlarmsAndSelectFireable()`: 주식 알림 대상 추출
+- `exportToJson()` / `importFromJson(jsonStr)`: JSON 형식을 이용한 카드 데이터 백업 및 복구
+- `CardEntity.decode(str)` / `CardEntity.encode(list)`: 버스 도착 정보 등 복합 데이터를 JSON으로 직렬화하여 DB에 저장
 
 ---
 

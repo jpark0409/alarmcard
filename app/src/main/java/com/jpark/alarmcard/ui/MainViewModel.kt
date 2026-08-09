@@ -109,9 +109,9 @@ class MainViewModel @Inject constructor(
         repo.setAutoEnable(id, enabled, days, time)
         val entity = repo.getCardById(id) ?: return@launch
         if (enabled) {
-            AutoEnableReceiver.scheduleNext(getApplication(), entity)
+            com.jpark.alarmcard.notify.AutoEnableWorker.scheduleNext(getApplication(), entity)
         } else {
-            AutoEnableReceiver.cancel(getApplication(), id)
+            com.jpark.alarmcard.notify.AutoEnableWorker.cancel(getApplication(), id)
         }
     }
 
