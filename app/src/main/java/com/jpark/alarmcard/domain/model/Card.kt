@@ -48,7 +48,8 @@ data class BusArrival(
     val eta2Sec: Int?,   // 두 번째 도착까지 남은 초
     val remainStops1: Int? = null,
     val remainStops2: Int? = null,
-    val lowFloor1: Boolean = false
+    val lowFloor1: Boolean = false,
+    val plateNo1: String? = null // 첫 번째 버스 차량번호
 )
 
 data class BusCard(
@@ -70,7 +71,9 @@ data class BusCard(
     /** 몇 분 전에 알림을 울릴지 (예: 3 → 3분 이내 도착 시) */
     val alarmMinutesBefore: Int = 3,
     /** 중복 알림 방지용 마지막 발송 시각 */
-    val alarmLastFiredAt: Long = 0L
+    val alarmLastFiredAt: Long = 0L,
+    /** 마지막으로 알람을 울린 차량 번호들 (routeId:plateNo,routeId:plateNo 형태) */
+    val alarmLastFiredVehicles: String? = null
 ) : Card
 
 data class FxCard(

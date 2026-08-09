@@ -167,15 +167,42 @@ class CardRepository @Inject constructor(
             val bc = e.toDomain() as com.jpark.alarmcard.domain.model.BusCard
             // 필터된 노선 중에 eta1Sec <= alarmMinutesBefore*60 인 것이 있는지
             val threshold = bc.alarmMinutesBefore * 60
-            val hit = bc.arrivals.firstOrNull { a -> a.eta1Sec != null && a.eta1Sec in 0..threshold }
-            if (hit != null) {
-                // 중복 방지: 마지막 알림이 최근 5분 이내면 스킵
-                if (nowMs - bc.alarmLastFiredAt > 5 * 60_000L) {
-                    // 발송 기록
-                    dao.upsert(e.copy(alarmLastFiredAt = nowMs))
-                    fire += bc
-                }
+            
+            // 각 노선별로 마지막 발송 차량 정보를 파싱 (routeId:plateNo,...)
+            val lastFiredMap = bc.alarmLastFiredVehicles?.split(",")
+                ?.filter { it.contains(":") }
+                ?.associate { it.split(":").let { p -> p[0] to p[1] } }
+                ?: emptyList<Pair<String, String>>().toMap()
+
+            val toFireArrivals = bc.arrivals.filter { a -> 
+                val isTimeMatch = a.eta1Sec != null && a.eta1Sec in 0..threshold
+                if (!isTimeMatch) return@filter false
+                
+                val lastPlate = lastFiredMap[a.routeId]
+                val currentPlate = a.plateNo1
+                
+                // 조건: (차량 번호가 다르거나 모름) OR (마지막 발송 후 5분 경과)
+                val isNewVehicle = currentPlate != null && currentPlate != lastPlate
+                val isTimeout = (nowMs - bc.alarmLastFiredAt > 5 * 60_000L)
+                
+                isNewVehicle || isTimeout
             }
+
+            if (toFireArrivals.isNotEmpty()) {
+                // 발송 차량 정보 업데이트
+                val newFiredMap = lastFiredMap.toMutableMap()
+                toFireArrivals.forEach { a ->
+                    a.plateNo1?.let { newFiredMap[a.routeId] = it }
+                }
+                val newFiredCsv = newFiredMap.entries.joinToString(",") { "${it.key}:${it.value}" }
+                
+                dao.upsert(e.copy(
+                    alarmLastFiredAt = nowMs,
+                    alarmLastFiredVehicles = newFiredCsv
+                ))
+                fire += bc
+            }
+
         }
         return fire
     }

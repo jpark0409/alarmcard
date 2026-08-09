@@ -21,7 +21,7 @@ data class CardEntity(
     val autoEnableDays: Int = 0,
     val autoEnableTime: String? = null,
 
-    // Stock
+    // Stock & Common Price Fields
     val symbol: String? = null,
     val market: String? = null,  // DOMESTIC/US
     val name: String? = null,
@@ -41,6 +41,7 @@ data class CardEntity(
     val alarmEnabled: Boolean = false,
     val alarmMinutesBefore: Int = 3,
     val alarmLastFiredAt: Long = 0L,
+    val alarmLastFiredVehicles: String? = null,
 
     // Fx
     val code: String? = null,
@@ -77,7 +78,8 @@ fun Card.toEntity(): CardEntity = when (this) {
         arrivalsJson = ArrivalCodec.encode(arrivals),
         alarmEnabled = alarmEnabled,
         alarmMinutesBefore = alarmMinutesBefore,
-        alarmLastFiredAt = alarmLastFiredAt
+        alarmLastFiredAt = alarmLastFiredAt,
+        alarmLastFiredVehicles = alarmLastFiredVehicles
     )
     is FxCard -> CardEntity(
         id = id, type = CardEntity.TYPE_FX, orderIdx = order,
@@ -111,7 +113,8 @@ fun CardEntity.toDomain(): Card = when (type) {
         arrivals = arrivalsJson?.let { ArrivalCodec.decode(it) } ?: emptyList(),
         alarmEnabled = alarmEnabled,
         alarmMinutesBefore = alarmMinutesBefore,
-        alarmLastFiredAt = alarmLastFiredAt
+        alarmLastFiredAt = alarmLastFiredAt,
+        alarmLastFiredVehicles = alarmLastFiredVehicles
     )
     CardEntity.TYPE_FX -> FxCard(
         id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,
@@ -134,16 +137,17 @@ object ArrivalCodec {
         val eta2Sec: Int? = null,
         val remainStops1: Int? = null,
         val remainStops2: Int? = null,
-        val lowFloor1: Boolean = false
+        val lowFloor1: Boolean = false,
+        val plateNo1: String? = null
     )
 
     fun encode(list: List<BusArrival>): String {
-        val dtos = list.map { Dto(it.routeId, it.routeNo, it.eta1Sec, it.eta2Sec, it.remainStops1, it.remainStops2, it.lowFloor1) }
+        val dtos = list.map { Dto(it.routeId, it.routeNo, it.eta1Sec, it.eta2Sec, it.remainStops1, it.remainStops2, it.lowFloor1, it.plateNo1) }
         return json.encodeToString(kotlinx.serialization.builtins.ListSerializer(Dto.serializer()), dtos)
     }
 
     fun decode(str: String): List<BusArrival> = try {
         val dtos = json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Dto.serializer()), str)
-        dtos.map { BusArrival(it.routeId, it.routeNo, it.eta1Sec, it.eta2Sec, it.remainStops1, it.remainStops2, it.lowFloor1) }
+        dtos.map { BusArrival(it.routeId, it.routeNo, it.eta1Sec, it.eta2Sec, it.remainStops1, it.remainStops2, it.lowFloor1, it.plateNo1) }
     } catch (t: Throwable) { emptyList() }
 }

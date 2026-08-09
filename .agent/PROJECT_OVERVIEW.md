@@ -15,9 +15,9 @@
 2. **버스 카드**: 서울/수도권 정류장 도착 정보 조회 및 알림 기능
 3. **환율 카드**: 주요 통화쌍(USD/KRW, JPY/KRW, EUR/KRW 등) 실시간 환율
 4. **카드 관리**: 카드 추가/삭제/재정렬, 병렬 새로고침, 자동 갱신(화면 활성화 시)
-5. **버스 알림**: 도착 N분 전 알림 설정 (WorkManager 기반)
+5. **버스 알림**: 도착 N분 전 알림 설정 (WorkManager 기반, **차량 고유 번호(plateNo) 추적을 통한 중복 방지 및 연속 버스 알림 지원**)
 6. **주식 알림**: 특정 가격 도달 또는 변동률 임계치 도달 시 알림 (WorkManager 기반)
-7. **알림 자동 활성화**: 주 단위(요일) 및 특정 시각에 알림을 자동으로 켜주는 기능 (WorkManager 기반, 앱 종료 시에도 동작 보장)
+7. **알림 자동 활성화**: 주 단위(요일) 및 특정 시각에 알림을 자동으로 켜주는 기능 (지정 시각에 Worker를 즉시 예약하여 안정성 강화)
 
 ### 데이터 소스
 - **주식**: 야후 파이낸스 API (Search/Quote API 사용)
@@ -187,9 +187,10 @@ CardRepository.setBusAlarm()
 rescheduleBusAlarmWorker() → BusAlarmWorker 실행 (주기적)
   ↓
 CardRepository.refreshBusAlarmsAndSelectFireable()
-  ├─ 모든 활성 버스카드 새로고침
-  ├─ eta1Sec <= alarmMinutesBefore*60 인 노선 검색
-  └─ 발송 대상 리스트 반환
+  ├─ 모든 활성 버스카드 새로고침 (차량 번호 plateNo 포함)
+  ├─ eta1Sec <= alarmMinutesBefore*60 조건 확인
+  ├─ 차량 번호 비교: (새로운 차량인 경우 즉시 발송) OR (동일 차량인 경우 5분 경과 확인)
+  └─ 발송 대상 리스트 반환 및 마지막 발송 차량 정보 업데이트
 
 NotificationHelper.notifyBusArrival() 발송
 ```
@@ -227,6 +228,7 @@ AutoEnableWorker.scheduleNext() → WorkManager 등록 (OneTimeWorkRequest + Ini
 지정된 시각에 AutoEnableWorker.doWork() 실행
   ├─ 현재 요일 체크
   ├─ 요일 일치 시 repository.setBusAlarm() 또는 setStockAlarm() 호출하여 활성화
+  ├─ 해당 타입의 AlarmWorker(Bus/Stock)를 즉시 예약하여 알람 루틴 시작 보장
   └─ 다음 실행을 위해 scheduleNext() 재귀 호출
 ```
 
@@ -240,7 +242,7 @@ AutoEnableWorker.scheduleNext() → WorkManager 등록 (OneTimeWorkRequest + Ini
 ```
 Card (sealed interface)
 ├── StockCard: symbol, market, name, price, change, changeRate, currency, alarmEnabled, alarmPriceThreshold, alarmRateThreshold, autoEnabled, autoEnableDays, autoEnableTime
-├── BusCard: stationId, stationName, filterRouteIds, arrivals[], alarmEnabled, alarmMinutesBefore, autoEnabled, autoEnableDays, autoEnableTime
+├── BusCard: stationId, stationName, filterRouteIds, arrivals[plateNo 포함], alarmEnabled, alarmMinutesBefore, alarmLastFiredVehicles, autoEnabled, autoEnableDays, autoEnableTime
 └── FxCard: code, base, quote, rate, change, changeRate, autoEnabled, autoEnableDays, autoEnableTime
 ```
 

@@ -60,31 +60,16 @@ data class BusStationDetail(
  *       "referenceTime": "2026-08-08T15:24:29+09:00"
  *     }
  *   }, ...]
- *
- * 정류장 검색 API 는 캡차 벽 때문에 프로그램적 크롤링이 불안정하므로,
- * 사용자는 브라우저의 네이버 지도 URL(정류장 페이지)을 앱에 붙여넣는 방식으로 stationId 를 등록한다:
- *   https://map.naver.com/p/search/{keyword}/bus-station/{stationId}?...
- *   → parseStationUrl() 이 stationId 와 stationName 을 뽑아냄.
  */
 @Singleton
 class NaverMapBusCrawler @Inject constructor() {
 
-    /**
-     * 사용자가 붙여넣은 네이버 지도 URL 에서 stationId + name 을 파싱.
-     * 지원 형태:
-     *  - https://map.naver.com/p/search/{query}/bus-station/{stationId}?...
-     *  - https://map.naver.com/p/search/{query}/bus-route/{routeId}?bsl={routeId},{stationId},{seq}...
-     *  - https://map.naver.com/p/bus/bus-station/{name}/bus-route/{routeId}?bsl=...
-     *  - https://m.map.naver.com/bus/station?stationID={stationId}&busID={routeId}
-     *  - stationId 숫자만 (예: 194374)
-     */
     fun parseStationUrl(input: String): BusStationSearchResult? {
         val s = input.trim()
         if (s.matches(Regex("^\\d{3,10}$"))) {
             return BusStationSearchResult(stationId = s, stationName = "정류장 $s")
         }
 
-        // Mobile web: m.map.naver.com/bus/station?stationID=194374&busID=20025664
         val mobileStationRx = Regex("m\\.map\\.naver\\.com/bus/station")
         if (mobileStationRx.find(s) != null) {
             val stationIdRx = Regex("[?&]stationID=(\\d+)")
@@ -95,7 +80,6 @@ class NaverMapBusCrawler @Inject constructor() {
             }
         }
 
-        // bus-station/{id} (desktop web)
         val busStationRx = Regex("/bus-station/(\\d+)")
         val bsMatch = busStationRx.find(s)
         val nameFromPath: String? = Regex("/p/search/([^/?]+)").find(s)?.groupValues?.getOrNull(1)?.let {
@@ -106,7 +90,6 @@ class NaverMapBusCrawler @Inject constructor() {
             return BusStationSearchResult(stationId = id, stationName = nameFromPath ?: "정류장 $id")
         }
 
-        // bsl={routeId},{stationId},{seq} 로부터 stationId 추출 (desktop web)
         val bslRx = Regex("[?&]bsl=([^&]+)")
         val bslMatch = bslRx.find(s)
         if (bslMatch != null) {
@@ -122,10 +105,6 @@ class NaverMapBusCrawler @Inject constructor() {
         return null
     }
 
-    /**
-     * 실시간 도착정보 조회.
-     * @param stationId 예: "194374"
-     */
     suspend fun fetchArrivals(stationId: String, cityCode: String? = null): BusStationDetail {
         val url = "https://map.naver.com/p/api/pubtrans/realtime/bus/arrivals/multi?stations=$stationId"
         val body = httpGetString(
@@ -147,7 +126,6 @@ class NaverMapBusCrawler @Inject constructor() {
         val items: List<JsonObject> = when (root) {
             is JsonArray -> root.mapNotNull { it as? JsonObject }
             is JsonObject -> {
-                // wrapped forms {"result":[...]} or {"data":[...]}
                 listOf("result", "data", "items", "arrivals").flatMap { k ->
                     (root[k] as? JsonArray)?.mapNotNull { it as? JsonObject } ?: emptyList()
                 }
@@ -159,7 +137,6 @@ class NaverMapBusCrawler @Inject constructor() {
             return BusStationDetail(stationId, "정류장 $stationId", cityCode, emptyList())
         }
 
-        // stationName 결정 (첫 항목 stopDisplayName)
         val stationName = items.firstOrNull()?.strOrNull("stopDisplayName") ?: "정류장 $stationId"
 
         val arrivals = items.mapNotNull { itm ->
@@ -186,7 +163,8 @@ class NaverMapBusCrawler @Inject constructor() {
                 eta2Sec = eta2,
                 remainStops1 = remainStops1,
                 remainStops2 = remainStops2,
-                lowFloor1 = lowFloor1
+                lowFloor1 = lowFloor1,
+                plateNo1 = buses.getOrNull(0)?.strOrNull("plateNo")
             )
         }
 
@@ -198,15 +176,8 @@ class NaverMapBusCrawler @Inject constructor() {
         )
     }
 
-    /**
-     * 정류장 검색은 네이버 캡차 벽으로 프로그램적 접근이 불안정.
-     * 대신 사용자가 붙여넣는 URL 또는 stationId 를 parseStationUrl 로 처리해 대체함.
-     * 이 메서드는 시도만 하고 결과가 없으면 빈 리스트를 반환한다 (fail-soft).
-     */
     suspend fun searchStation(keyword: String): List<BusStationSearchResult> {
-        // 사용자가 URL/숫자를 붙여넣었다면 즉시 파싱해서 반환
         parseStationUrl(keyword)?.let { return listOf(it) }
-        // 그 외 텍스트 검색은 지원하지 않음
         return emptyList()
     }
 }

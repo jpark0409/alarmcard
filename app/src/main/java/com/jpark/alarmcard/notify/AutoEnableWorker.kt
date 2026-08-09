@@ -40,8 +40,10 @@ class AutoEnableWorker @AssistedInject constructor(
         if ((entity.autoEnableDays and dayBit) != 0) {
             if (entity.type == CardEntity.TYPE_BUS) {
                 repository.setBusAlarm(cardId, true, entity.alarmMinutesBefore)
+                BusAlarmWorker.scheduleNext(applicationContext, 5L)
             } else if (entity.type == CardEntity.TYPE_STOCK) {
                 repository.setStockAlarm(cardId, true, entity.alarmPriceThreshold, entity.alarmRateThreshold)
+                StockAlarmWorker.scheduleNext(applicationContext, 5L)
             }
         }
 
