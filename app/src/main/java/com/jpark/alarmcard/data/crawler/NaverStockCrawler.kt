@@ -38,19 +38,21 @@ data class StockSearchResult(
  *
  * 사용자 입력은 다음 두 형태를 지원합니다:
  *   1) 네이버 금융 종목 URL          : https://finance.naver.com/item/main.naver?code=005930
- *   2) 6자리 종목코드 (국내)          : 005930
+ *   2) 네이버 모바일 증권 URL        : https://m.stock.naver.com/domestic/stock/005930/total
+ *   3) 6자리 종목코드 (국내)          : 005930
  *
- * 위의 URL/코드로 EUC-KR로 서빙되는 finance.naver.com 페이지를 파싱해 종목명/현재가/전일대비를 추출합니다.
+ * PC 버전(finance.naver.com)과 모바일 버전(m.stock.naver.com) 모두 지원합니다.
+ * 우선순위: PC URL → 모바일 URL → 모바일 __NEXT_DATA__ 파싱 → 코드
  */
 @Singleton
 class NaverStockCrawler @Inject constructor() {
 
     /**
      * 카드 리프레시 용. StockCard 의 symbol(6자리 코드) + market 만 있으면
-     * finance.naver.com 페이지를 다시 파싱해 최신 값을 반환.
+     * PC(finance.naver.com) 또는 모바일(m.stock.naver.com) 페이지를 파싱해 최신 값을 반환.
      */
     suspend fun fetchQuote(symbol: String, market: StockMarket): StockQuote {
-        // 국내는 finance.naver.com HTML 파싱. 해외는 fallback 으로 m.stock.naver.com 사용.
+        // 국내: PC 우선, 실패 시 모바일 폴백. 해외는 m.stock.naver.com 사용.
         return when (market) {
             StockMarket.DOMESTIC -> fetchDomesticQuote(symbol)
             StockMarket.US -> fetchOverseasQuote(symbol)
@@ -108,12 +110,28 @@ class NaverStockCrawler @Inject constructor() {
         return emptyList()
     }
 
-    /* ---------------- 국내 (UTF-8 HTML) ---------------- */
+    /* ---------------- 국내 (PC + 모바일 폴백) ---------------- */
 
     private suspend fun fetchDomesticQuote(code: String): StockQuote {
+        // 1. PC 버전 시도 (finance.naver.com)
+        val pcResult = runCatching {
+            fetchDomesticFromPc(code)
+        }.getOrNull()
+        if (pcResult != null) return pcResult
+
+        // 2. 모바일 버전 시도 (m.stock.naver.com/domestic)
+        val mobileResult = runCatching {
+            fetchDomesticFromMobile(code)
+        }.getOrNull()
+        if (mobileResult != null) return mobileResult
+
+        // 3. 모두 실패 시 에러
+        error("Failed to fetch domestic quote for $code from both PC and mobile")
+    }
+
+    private suspend fun fetchDomesticFromPc(code: String): StockQuote {
         val url = "https://finance.naver.com/item/main.naver?code=$code"
         // finance.naver.com 은 현재 <meta charset="utf-8"> 로 서빙되고 있음.
-        // OkHttp 기본 (UTF-8) 로 파싱한 뒤, 만약 문자가 깨진 것으로 보이면 EUC-KR fallback.
         val html = httpGetString(
             url = url,
             referer = "https://finance.naver.com/",
@@ -122,7 +140,6 @@ class NaverStockCrawler @Inject constructor() {
             )
         )
         val doc = Jsoup.parse(html)
-
 
         // 종목명: <div class="wrap_company"><h2><a>삼성전자</a></h2>
         val name = doc.selectFirst(".wrap_company h2 a")?.text()?.trim()
@@ -134,6 +151,7 @@ class NaverStockCrawler @Inject constructor() {
         // 현재가: <p class="no_today"> ... <span class="blind">231,000</span>
         val priceText = doc.selectFirst("p.no_today .blind")?.text()
         val price = priceText?.replace(",", "")?.trim()?.toDoubleOrNull()
+            ?: error("Cannot extract price from PC version")
 
         // 전일대비 부호 (no_up / no_down / no_upordown)
         val exdayEm = doc.selectFirst("p.no_exday em")
@@ -156,6 +174,81 @@ class NaverStockCrawler @Inject constructor() {
             changeRate = rate,
             currency = "KRW"
         )
+    }
+
+    private suspend fun fetchDomesticFromMobile(code: String): StockQuote {
+        val url = "https://m.stock.naver.com/domestic/stock/$code/total"
+        val html = httpGetString(
+            url = url,
+            referer = "https://m.stock.naver.com/",
+            extraHeaders = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AlarmCard/1.0"
+            )
+        )
+
+        // 모바일 버전은 __NEXT_DATA__ JSON 사용
+        val quote = parseNextDataDomestic(html, code)
+        if (quote != null) return quote
+
+        // __NEXT_DATA__ 파싱 실패 시 CSS 폴백
+        return parseMobileCssFallback(html, code)
+            ?: error("Cannot parse mobile version for $code")
+    }
+
+    private fun parseNextDataDomestic(html: String, code: String): StockQuote? {
+        val root = NextData.extract(html) ?: return null
+        val stockObj = findStockObjectDomestic(root) ?: return null
+
+        val price = stockObj.doubleOrNull("closePrice")
+            ?: stockObj.doubleOrNull("nowPrice")
+            ?: stockObj.doubleOrNull("currentPrice")
+            ?: stockObj.doubleOrNull("price")
+        val change = stockObj.doubleOrNull("compareToPreviousClosePrice")
+            ?: stockObj.doubleOrNull("compareToPreviousPrice")
+            ?: stockObj.doubleOrNull("change")
+        val rate = stockObj.doubleOrNull("fluctuationsRatio")
+            ?: stockObj.doubleOrNull("changeRate")
+        val name = stockObj.strOrNull("stockName")
+            ?: stockObj.strOrNull("name")
+            ?: code
+
+        if (price == null) return null
+        return StockQuote(code, name, price, change, rate, "KRW")
+    }
+
+    private fun findStockObjectDomestic(root: JsonElement): JsonObject? {
+        val stack = ArrayDeque<JsonElement>()
+        stack.addLast(root)
+        while (stack.isNotEmpty()) {
+            val cur = stack.removeLast()
+            if (cur is JsonObject) {
+                val keys = cur.keys
+                // 국내 주식 객체 특징: closePrice + stockName 또는 closePrice + fluctuationsRatio
+                val looksLikeStock = (keys.contains("closePrice") && 
+                    (keys.contains("stockName") || keys.contains("fluctuationsRatio"))) ||
+                    keys.contains("nowPrice")
+                if (looksLikeStock) return cur
+                cur.values.forEach { stack.addLast(it) }
+            } else if (cur is kotlinx.serialization.json.JsonArray) {
+                cur.forEach { stack.addLast(it) }
+            }
+        }
+        return null
+    }
+
+    private fun parseMobileCssFallback(html: String, code: String): StockQuote? {
+        val doc = Jsoup.parse(html)
+        // 모바일 버전: <span class="PriceTable_number...">
+        val priceText = doc.select("strong[class*=price]").firstOrNull()?.text()
+            ?: doc.select("[class*=PriceTable]").firstOrNull()?.text()
+            ?: doc.select("[class*=price]").firstOrNull()?.text()
+        val price = priceText?.replace(",", "")?.toDoubleOrNull() ?: return null
+
+        val name = doc.selectFirst("meta[property=og:title]")?.attr("content")
+            ?: doc.selectFirst("h1, h2")?.text()?.trim()
+            ?: code
+
+        return StockQuote(code, name, price, null, null, "KRW")
     }
 
     /* ---------------- 해외 (기존 __NEXT_DATA__ 방식 유지) ---------------- */
@@ -229,14 +322,21 @@ class NaverStockCrawler @Inject constructor() {
         // 순수 6자리 숫자
         val digits = input.filter { it.isDigit() }
         if (input.matches(Regex("^\\d{6}$"))) return input
-        // finance.naver.com/... code=005930
-        val m = Regex("[?&]code=([0-9]{6})").find(input)
-        if (m != null) return m.groupValues[1]
+
+        // PC URL: finance.naver.com/... code=005930
+        val pcMatch = Regex("[?&]code=([0-9]{6})").find(input)
+        if (pcMatch != null) return pcMatch.groupValues[1]
+
+        // 모바일 URL: m.stock.naver.com/domestic/stock/005930/total
+        val mobileMatch = Regex("domestic/stock/([0-9]{6})").find(input)
+        if (mobileMatch != null) return mobileMatch.groupValues[1]
+
         // /item/(?:main|sise|coinfo)\.naver 뒤 code=
         if (input.contains("finance.naver.com") && digits.length >= 6) {
             val d6 = Regex("([0-9]{6})").find(input)
             if (d6 != null) return d6.groupValues[1]
         }
+
         return null
     }
 
