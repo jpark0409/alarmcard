@@ -251,7 +251,9 @@ class NaverStockCrawler @Inject constructor() {
     /* ---------------- 해외 (기존 __NEXT_DATA__ 방식 유지) ---------------- */
 
     private suspend fun fetchOverseasQuote(symbol: String): StockQuote {
-        val url = "https://m.stock.naver.com/worldstock/stock/$symbol/total"
+        // 지수 종목(예: .INX)과 일반 종목(예: NVDA.O) 구분
+        val type = if (symbol.startsWith(".")) "index" else "stock"
+        val url = "https://m.stock.naver.com/worldstock/$type/$symbol/total"
         val html = httpGetString(url, referer = "https://m.stock.naver.com/")
         return parseNextData(html, symbol)
             ?: parseCssFallback(html, symbol)
@@ -338,11 +340,16 @@ class NaverStockCrawler @Inject constructor() {
     }
 
     private fun extractOverseasSymbol(input: String): String? {
-        // m.stock.naver.com/worldstock/stock/AAPL.O/total
-        val m = Regex("worldstock/stock/([A-Za-z0-9.\\-]+)").find(input)
+        // m.stock.naver.com/worldstock/(stock|index)/AAPL.O/total
+        val m = Regex("worldstock/(?:stock|index)/([A-Za-z0-9.\\-]+)").find(input)
         if (m != null) return m.groupValues[1].uppercase()
-        // 심볼 형태 (AAPL, AAPL.O, TSM.N 등)
+
+        // 심볼 형태: AAPL, AAPL.O, TSM.N 또는 .INX, .DJI 등
+        // 1) 지수 형태: . 으로 시작하는 대문자 (예: .INX)
+        if (input.matches(Regex("^\\.[A-Z]{2,6}$"))) return input.uppercase()
+        // 2) 일반 종목 형태: AAPL, AAPL.O 등
         if (input.matches(Regex("^[A-Za-z]{1,6}(\\.[A-Za-z])?$"))) return input.uppercase()
+
         return null
     }
 }
