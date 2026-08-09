@@ -34,6 +34,12 @@
 - **ViewModel**: `ui/MainViewModel.kt` (setBusAlarm 호출)
 - **UI**: `ui/HomeScreen.kt` 또는 BusCard Composable (알림 설정 UI)
 
+### 알림 자동 활성화(Auto-Enable) 기능 수정 시
+- **Receiver**: `notify/AutoEnableReceiver.kt` (AlarmManager 및 요일 체크 로직)
+- **Repository**: `data/CardRepository.kt` (setAutoEnable)
+- **ViewModel**: `ui/MainViewModel.kt` (setAutoEnable 호출 및 Receiver 예약 제어)
+- **UI**: `ui/HomeScreen.kt` (AutoEnableSetupDialog 및 설정 아이콘)
+
 ### 데이터베이스 스키마 수정 시
 - **Entity**: `data/local/CardEntity.kt` (필드 추가/삭제)
 - **DAO**: `data/local/CardDao.kt` (쿼리 수정)
