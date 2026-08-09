@@ -1,5 +1,6 @@
 package com.jpark.alarmcard.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +64,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     vm: MainViewModel,
@@ -71,6 +72,7 @@ fun HomeScreen(
 ) {
     val cards by vm.cards.collectAsStateWithLifecycle()
     val refreshing by vm.isRefreshing.collectAsStateWithLifecycle()
+    var activeId by remember { mutableStateOf<String?>(null) }
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         val reorderedIds = cards.toMutableList().apply {
@@ -126,15 +128,18 @@ fun HomeScreen(
                     state = lazyListState
                 ) {
                     items(cards, key = { it.id }) { c ->
-                        ReorderableItem(reorderState, key = c.id) { isDragging ->
+                        ReorderableItem(reorderState, key = c.id) { _ ->
                             CardItem(
                                 card = c,
                                 onDelete = { vm.deleteCard(c.id) },
                                 onSetBusAlarm = { enabled, minutes ->
                                     vm.setBusAlarm(c.id, enabled, minutes)
                                 },
-                                modifier = Modifier.longPressDraggableHandle(),
-                                isDragging = isDragging
+                                modifier = Modifier.longPressDraggableHandle(
+                                    onDragStarted = { activeId = c.id },
+                                    onDragStopped = { activeId = null }
+                                ),
+                                isActive = activeId == c.id
                             )
                         }
                     }
@@ -163,7 +168,7 @@ fun CardItem(
     onDelete: () -> Unit,
     onSetBusAlarm: (Boolean, Int) -> Unit,
     modifier: Modifier = Modifier,
-    isDragging: Boolean = false
+    isActive: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
 
@@ -172,7 +177,7 @@ fun CardItem(
             .fillMaxWidth()
             .height(96.dp),
         shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(if (isDragging) 8.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(if (isActive) 8.dp else 2.dp)
     ) {
         Column(
             modifier = Modifier
