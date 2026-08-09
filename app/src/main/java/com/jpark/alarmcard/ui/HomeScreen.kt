@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,9 +24,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -161,7 +161,8 @@ private fun EmptyState(pv: PaddingValues) {
     ) {
         Text(
             "우측 상단 + 로 카드를 추가하세요\n주식 / 버스 / 환율",
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -183,7 +184,11 @@ fun CardItem(
             .fillMaxWidth()
             .height(80.dp),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(if (isActive) 8.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(if (isActive) 8.dp else 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
     ) {
         Column(
             modifier = Modifier
@@ -210,7 +215,7 @@ fun CardItem(
                         card.arrivals.first().routeNo,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEB6100),
+                        color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
                 }
@@ -230,7 +235,7 @@ fun CardItem(
                             Icon(
                                 if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                                 contentDescription = null,
-                                tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
+                                tint = if (card.alarmEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -249,7 +254,7 @@ fun CardItem(
                             Icon(
                                 if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                                 contentDescription = null,
-                                tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
+                                tint = if (card.alarmEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -261,7 +266,7 @@ fun CardItem(
                         Icon(
                             Icons.Filled.Delete,
                             contentDescription = "삭제",
-                            tint = Color.Gray,
+                            tint = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -286,7 +291,7 @@ fun CardItem(
                 Text(
                     text = footerText(card),
                     fontSize = 10.sp,
-                    color = Color.LightGray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
@@ -333,12 +338,12 @@ private fun StockAlarmSetupDialog(
                     TextButton(
                         onClick = { mode = 0 },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 0) MaterialTheme.colorScheme.primary else Color.Gray)
+                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     ) { Text("가격 기준") }
                     TextButton(
                         onClick = { mode = 1 },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 1) MaterialTheme.colorScheme.primary else Color.Gray)
+                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     ) { Text("변동률 기준") }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -413,15 +418,15 @@ private fun BusAlarmSetupDialog(
 @Composable
 private fun TypeBadge(c: DomainCard) {
     val (label, color) = when (c) {
-        is StockCard -> "주식" to Color(0xFF0F62FE)
-        is FxCard -> "환율" to Color(0xFF10893E)
-        is BusCard -> "버스" to Color(0xFFEB6100)
+        is StockCard -> "주식" to MaterialTheme.colorScheme.primary
+        is FxCard -> "환율" to MaterialTheme.colorScheme.tertiary
+        is BusCard -> "버스" to MaterialTheme.colorScheme.secondary
     }
     Box(
         modifier = Modifier
             .background(color, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp)
-    ) { Text(label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+    ) { Text(label, color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
@@ -431,10 +436,11 @@ private fun StockBodyCompact(c: StockCard) {
             text = c.price?.let { fmtPrice(it, c.currency) } ?: "—",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.size(8.dp))
-        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
+        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: MaterialTheme.colorScheme.outline
         Text(
             text = buildString {
                 if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + fmtPrice(kotlin.math.abs(c.change), c.currency))
@@ -447,7 +453,7 @@ private fun StockBodyCompact(c: StockCard) {
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.size(6.dp))
-        Text(c.symbol, fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+        Text(c.symbol, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -458,10 +464,11 @@ private fun FxBodyCompact(c: FxCard) {
             text = c.rate?.let { String.format("%,.2f", it) } ?: "—",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.size(8.dp))
-        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
+        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: MaterialTheme.colorScheme.outline
         Text(
             text = buildString {
                 if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + String.format("%.2f", kotlin.math.abs(c.change)))
@@ -473,7 +480,7 @@ private fun FxBodyCompact(c: FxCard) {
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.size(6.dp))
-        Text("${c.base}→${c.quote}", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+        Text("${c.base}→${c.quote}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -481,19 +488,20 @@ private fun FxBodyCompact(c: FxCard) {
 private fun BusBodyCompact(c: BusCard) {
     val a = c.arrivals.firstOrNull()
     if (a == null) {
-        Text("도착 정보 없음", color = Color.Gray, fontSize = 12.sp)
+        Text("도착 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
     } else {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 fmtEta(a.eta1Sec, a.remainStops1),
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             if (a.eta2Sec != null) {
                 Text(
                     "  [다음: ${fmtEta(a.eta2Sec, a.remainStops2)}]",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

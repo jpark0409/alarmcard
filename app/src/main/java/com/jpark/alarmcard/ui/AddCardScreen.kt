@@ -23,6 +23,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -96,13 +97,13 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
         Text(
             "네이버 금융 종목 URL 또는 6자리 종목코드를 입력하세요.",
             fontSize = 12.sp,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             "예) https://finance.naver.com/item/main.naver?code=005930\n" +
                 "또는 코드만: 005930",
             fontSize = 11.sp,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(6.dp))
         SearchBar(q, "네이버 금융 URL 또는 종목코드") { q = it }
@@ -126,7 +127,7 @@ private fun AddStockTab(vm: MainViewModel, onBack: () -> Unit) {
 
         errorMsg?.let {
             Spacer(Modifier.height(6.dp))
-            Text(it, color = Color(0xFFD32F2F), fontSize = 12.sp)
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
         }
 
         Spacer(Modifier.height(10.dp))
@@ -166,13 +167,13 @@ private fun AddBusTab(
         Text(
             "네이버 지도 정류장 URL 또는 정류장 ID(숫자)를 입력하세요.",
             fontSize = 12.sp,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             "예) https://map.naver.com/p/search/판교역/bus-station/194374?...\n" +
                 "또는 정류장 ID만: 194374",
             fontSize = 11.sp,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(6.dp))
         SearchBar(input, "네이버 지도 URL 또는 정류장 ID") { input = it }
@@ -208,14 +209,14 @@ private fun AddBusTab(
 
         errorMsg?.let {
             Spacer(Modifier.height(6.dp))
-            Text(it, color = Color(0xFFD32F2F), fontSize = 12.sp)
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
         }
 
         Spacer(Modifier.height(10.dp))
 
         selectedStation?.let { st ->
-            Text("정류장: ${st.stationName}", fontWeight = FontWeight.Bold)
-            Text("(ID: ${st.stationId})", fontSize = 11.sp, color = Color.Gray)
+            Text("정류장: ${st.stationName}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("(ID: ${st.stationId})", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
 
             Button(
@@ -237,7 +238,7 @@ private fun AddBusTab(
             if (routeChoices.isNotEmpty()) {
                 Text(
                     "표시할 노선을 선택하세요 (선택 안 하면 전체 표시)",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
                 LazyColumn(
@@ -254,7 +255,7 @@ private fun AddBusTab(
                                     if (it) checkedRoutes.add(id) else checkedRoutes.remove(id)
                                 }
                             )
-                            Text(no)
+                            Text(no, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -276,9 +277,9 @@ private fun AddFxTab(vm: MainViewModel, onBack: () -> Unit) {
     }
 
     Column(Modifier.padding(12.dp)) {
-        Text("환율 프리셋", fontWeight = FontWeight.Bold)
+        Text("환율 프리셋", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(6.dp))
-        if (loading) Text("불러오는 중...", color = Color.Gray)
+        if (loading) Text("불러오는 중...", color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(items, key = { it.code }) { q ->
                 ResultRow(
@@ -309,11 +310,15 @@ private fun ResultRow(title: String, subtitle: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
-        elevation = CardDefaults.cardElevation(1.dp)
+        elevation = CardDefaults.cardElevation(1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     ) {
         Column(Modifier.padding(12.dp)) {
-            Text(title, fontWeight = FontWeight.Bold)
-            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = Color.Gray)
+            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
