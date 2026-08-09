@@ -134,7 +134,7 @@ fun HomeScreen(
                                 onSetBusAlarm = { enabled, minutes ->
                                     vm.setBusAlarm(c.id, enabled, minutes)
                                 },
-                                modifier = Modifier.draggableHandle(),
+                                modifier = with(this) { Modifier.draggableHandle() },
                                 isDragging = isDragging
                             )
                         }
