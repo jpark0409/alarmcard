@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
@@ -36,10 +36,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -59,10 +57,9 @@ import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card as DomainCard
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
-import org.burnoutcrew.reorderable.ReorderableItem
-import org.burnoutcrew.reorderable.detectReorderAfterLongPress
-import org.burnoutcrew.reorderable.rememberReorderableLazyListState
-import org.burnoutcrew.reorderable.reorderable
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.draggableHandle
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,18 +73,17 @@ fun HomeScreen(
     val cards by vm.cards.collectAsStateWithLifecycle()
     val refreshing by vm.isRefreshing.collectAsStateWithLifecycle()
     val pullRefreshState = rememberPullToRefreshState()
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        val reorderedIds = cards.toMutableList().apply {
+            add(to.index, removeAt(from.index))
+        }.map { it.id }
+        vm.reorder(reorderedIds)
+    }
 
     // 화면이 active(RESUMED) 될 때 자동 새로고침
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.onScreenResumed()
-    }
-
-    LaunchedEffect(refreshing) {
-        if (refreshing) {
-            pullRefreshState.startRefresh()
-        } else {
-            pullRefreshState.endRefresh()
-        }
     }
 
     Scaffold(
@@ -112,30 +108,22 @@ fun HomeScreen(
             )
         }
     ) { inner ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { vm.refresh() },
+            modifier = Modifier.fillMaxSize(),
+            state = pullRefreshState
         ) {
             if (cards.isEmpty()) {
                 EmptyState(inner)
             } else {
-                val reorderState = rememberReorderableLazyListState(onMove = { from, to ->
-                    val reorderedIds = cards.toMutableList().apply {
-                        add(to.index, removeAt(from.index))
-                    }.map { it.id }
-                    vm.reorder(reorderedIds)
-                })
-
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(inner)
-                        .reorderable(reorderState)
-                        .detectReorderAfterLongPress(reorderState),
+                        .padding(inner),
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    state = reorderState.listState
+                    state = lazyListState
                 ) {
                     items(cards, key = { it.id }) { c ->
                         ReorderableItem(reorderState, key = c.id) { isDragging ->
@@ -145,18 +133,13 @@ fun HomeScreen(
                                 onSetBusAlarm = { enabled, minutes ->
                                     vm.setBusAlarm(c.id, enabled, minutes)
                                 },
+                                modifier = Modifier.draggableHandle(),
                                 isDragging = isDragging
                             )
                         }
                     }
                 }
             }
-
-            PullToRefreshContainer(
-                modifier = Modifier.align(Alignment.TopCenter),
-                state = pullRefreshState,
-                onRefresh = { vm.refresh() }
-            )
         }
     }
 }
@@ -179,16 +162,17 @@ fun CardItem(
     card: DomainCard,
     onDelete: () -> Unit,
     onSetBusAlarm: (Boolean, Int) -> Unit,
+    modifier: Modifier = Modifier,
     isDragging: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(96.dp),
         shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(if (isDragging) 8.dp else 2.dp)
     ) {
         Column(
             modifier = Modifier
@@ -354,29 +338,6 @@ private fun StockBodyCompact(c: StockCard) {
 }
 
 @Composable
-private fun StockBody(c: StockCard) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(
-            text = c.price?.let { fmtPrice(it, c.currency) } ?: "—",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.size(10.dp))
-        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
-        Text(
-            text = buildString {
-                if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + fmtPrice(kotlin.math.abs(c.change), c.currency))
-                if (c.changeRate != null) append("  " + String.format("%.2f%%", c.changeRate))
-                if (c.change == null && c.changeRate == null) append("변동 정보 없음")
-            },
-            color = chgColor,
-            fontSize = 13.sp
-        )
-    }
-    Text(c.symbol, fontSize = 12.sp, color = Color.Gray)
-}
-
-@Composable
 private fun FxBodyCompact(c: FxCard) {
     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -400,28 +361,6 @@ private fun FxBodyCompact(c: FxCard) {
         Spacer(Modifier.size(6.dp))
         Text("${c.base}→${c.quote}", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
     }
-}
-
-@Composable
-private fun FxBody(c: FxCard) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(
-            text = c.rate?.let { String.format("%,.2f", it) } ?: "—",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.size(10.dp))
-        val chgColor = c.change?.let { if (it >= 0) Color(0xFFD32F2F) else Color(0xFF1976D2) } ?: Color.Gray
-        Text(
-            text = buildString {
-                if (c.change != null) append((if (c.change >= 0) "▲" else "▼") + " " + String.format("%.2f", kotlin.math.abs(c.change)))
-                if (c.changeRate != null) append("  " + String.format("%.2f%%", c.changeRate))
-            },
-            color = chgColor,
-            fontSize = 13.sp
-        )
-    }
-    Text("${c.base} → ${c.quote}", fontSize = 12.sp, color = Color.Gray)
 }
 
 @Composable
@@ -457,37 +396,6 @@ private fun BusBodyCompact(c: BusCard) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BusBody(c: BusCard) {
-    if (c.arrivals.isEmpty()) {
-        Text("도착 정보 없음", color = Color.Gray)
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            c.arrivals.take(6).forEach { a ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(a.routeNo, fontWeight = FontWeight.Bold, modifier = Modifier.width(72.dp))
-                    Text(fmtEta(a.eta1Sec, a.remainStops1), fontSize = 13.sp)
-                    if (a.eta2Sec != null) {
-                        Text(
-                            "  |  ${fmtEta(a.eta2Sec, a.remainStops2)}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
-        }
-    }
-    if (c.alarmEnabled) {
-        Text(
-            "🔔 ${c.alarmMinutesBefore}분 전 알림 활성",
-            color = Color(0xFFF9A825),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
 

@@ -2,15 +2,12 @@ package com.jpark.alarmcard.data.crawler
 
 import com.jpark.alarmcard.data.remote.NextData
 import com.jpark.alarmcard.data.remote.httpGetString
-import com.jpark.alarmcard.data.remote.httpGetStringWithCharset
 import com.jpark.alarmcard.domain.model.StockMarket
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import timber.log.Timber
-import java.nio.charset.Charset
 import javax.inject.Inject
 import javax.inject.Singleton
 
