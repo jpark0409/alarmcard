@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jpark.alarmcard.data.CardRepository
 import com.jpark.alarmcard.notify.BusAlarmWorker
+import com.jpark.alarmcard.notify.StockAlarmWorker
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
@@ -63,6 +64,7 @@ class MainViewModel @Inject constructor(
     fun deleteCard(id: String) = viewModelScope.launch {
         repo.remove(id)
         rescheduleBusAlarmWorker()
+        rescheduleStockAlarmWorker()
     }
     fun reorder(ids: List<String>) = viewModelScope.launch { repo.reorder(ids) }
 
@@ -70,6 +72,20 @@ class MainViewModel @Inject constructor(
     fun setBusAlarm(cardId: String, enabled: Boolean, minutesBefore: Int) = viewModelScope.launch {
         repo.setBusAlarm(cardId, enabled, minutesBefore)
         rescheduleBusAlarmWorker()
+    }
+
+    fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) = viewModelScope.launch {
+        repo.setStockAlarm(id, enabled, price, rate)
+        rescheduleStockAlarmWorker()
+    }
+
+    private suspend fun rescheduleStockAlarmWorker() {
+        val ctx = getApplication<Application>()
+        if (repo.hasActiveStockAlarm()) {
+            StockAlarmWorker.scheduleNext(ctx, delaySec = 5)
+        } else {
+            StockAlarmWorker.cancel(ctx)
+        }
     }
 
     private suspend fun rescheduleBusAlarmWorker() {

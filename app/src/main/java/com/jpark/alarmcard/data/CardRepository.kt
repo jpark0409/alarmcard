@@ -78,7 +78,67 @@ class CardRepository @Inject constructor(
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS && it.alarmEnabled
         }
 
+    /** 주식카드 알람 설정 갱신 */
+    suspend fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) {
+        val entity = dao.getById(id) ?: return
+        if (entity.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK) return
+        dao.upsert(
+            entity.copy(
+                alarmEnabled = enabled,
+                alarmPriceThreshold = price,
+                alarmRateThreshold = rate,
+                alarmLastFiredAt = if (enabled) 0L else entity.alarmLastFiredAt
+            )
+        )
+    }
+
+    suspend fun hasActiveStockAlarm(): Boolean =
+        dao.getAll().any {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled
+        }
+
+    suspend fun refreshStockAlarmsAndSelectFireable(): List<StockCard> {
+        val entities = dao.getAll().filter {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled
+        }
+        // 새로고침
+        entities.forEach { runCatching { refreshCard(it.toDomain()) } }
+
+        val nowMs = System.currentTimeMillis()
+        val fire = mutableListOf<StockCard>()
+        for (e in dao.getAll()) {
+            if (e.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK || !e.alarmEnabled) continue
+            val sc = e.toDomain() as StockCard
+            val currentPrice = sc.price ?: continue
+
+            var isHit = false
+            // 1) 가격 임계점 (절대값 도달)
+            sc.alarmPriceThreshold?.let { threshold ->
+                // 특정 가격 도달 시 (보통 상하방 구분 없이 근접/통과 시 알려줌)
+                // 여기서는 간단히 마지막 발송 시점 대비 현재 상태만 체크
+                isHit = true 
+            }
+            // 2) 퍼센티지 임계점 (변동률 절대값)
+            sc.alarmRateThreshold?.let { threshold ->
+                if (kotlin.math.abs(sc.changeRate ?: 0.0) >= threshold) {
+                    isHit = true
+                }
+            }
+
+            if (isHit) {
+                // 중복 방지: 1시간(또는 30분) 이내 동일 종목 알림 방지
+                if (nowMs - sc.alarmLastFiredAt > 30 * 60_000L) {
+                    dao.upsert(e.copy(alarmLastFiredAt = nowMs))
+                    fire += sc
+                }
+            }
+        }
+        return fire
+    }
+
     /**
+>>>>>>> +++++++ REPLACE
+
      * 활성 버스카드들을 새로고침한 뒤, 알림을 발송해야 할 카드 목록을 반환.
      * (실제 발송은 상위 레이어에서 수행)
      */

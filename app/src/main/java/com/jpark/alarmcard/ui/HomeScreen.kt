@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -135,6 +136,9 @@ fun HomeScreen(
                                 onSetBusAlarm = { enabled, minutes ->
                                     vm.setBusAlarm(c.id, enabled, minutes)
                                 },
+                                onSetStockAlarm = { enabled, price, rate ->
+                                    vm.setStockAlarm(c.id, enabled, price, rate)
+                                },
                                 modifier = Modifier.longPressDraggableHandle(
                                     onDragStarted = { activeId = c.id },
                                     onDragStopped = { activeId = null }
@@ -167,10 +171,12 @@ fun CardItem(
     card: DomainCard,
     onDelete: () -> Unit,
     onSetBusAlarm: (Boolean, Int) -> Unit,
+    onSetStockAlarm: (Boolean, Double?, Double?) -> Unit,
     modifier: Modifier = Modifier,
     isActive: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
+    var showStockAlarmDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -210,6 +216,25 @@ fun CardItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (card is StockCard) {
+                        IconButton(
+                            onClick = {
+                                if (card.alarmEnabled) {
+                                    onSetStockAlarm(false, null, null)
+                                } else {
+                                    showStockAlarmDialog = true
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = if (card.alarmEnabled) Color(0xFFF9A825) else Color.Gray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     if (card is BusCard) {
                         IconButton(
                             onClick = {
@@ -278,6 +303,75 @@ fun CardItem(
             }
         )
     }
+
+    if (showStockAlarmDialog && card is StockCard) {
+        StockAlarmSetupDialog(
+            onDismiss = { showStockAlarmDialog = false },
+            onConfirm = { price, rate ->
+                showStockAlarmDialog = false
+                onSetStockAlarm(true, price, rate)
+            }
+        )
+    }
+}
+
+@Composable
+private fun StockAlarmSetupDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Double?, Double?) -> Unit
+) {
+    var priceText by remember { mutableStateOf("") }
+    var rateText by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(0) } // 0: 가격, 1: 퍼센트
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("주식 알림 설정") },
+        text = {
+            Column {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = { mode = 0 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 0) MaterialTheme.colorScheme.primary else Color.Gray)
+                    ) { Text("가격 기준") }
+                    TextButton(
+                        onClick = { mode = 1 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.textButtonColors(contentColor = if (mode == 1) MaterialTheme.colorScheme.primary else Color.Gray)
+                    ) { Text("변동률 기준") }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (mode == 0) {
+                    OutlinedTextField(
+                        value = priceText,
+                        onValueChange = { priceText = it },
+                        label = { Text("목표 가격") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = rateText,
+                        onValueChange = { rateText = it },
+                        label = { Text("목표 변동률 (%)") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val p = priceText.toDoubleOrNull()
+                val r = rateText.toDoubleOrNull()
+                onConfirm(if (mode == 0) p else null, if (mode == 1) r else null)
+            }) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
 }
 
 @Composable

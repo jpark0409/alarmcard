@@ -25,6 +25,8 @@ data class CardEntity(
     val change: Double? = null,
     val changeRate: Double? = null,
     val currency: String? = null,
+    val alarmPriceThreshold: Double? = null,
+    val alarmRateThreshold: Double? = null,
 
     // Bus
     val stationId: String? = null,
@@ -55,7 +57,11 @@ fun Card.toEntity(): CardEntity = when (this) {
         updatedAt = updatedAt, lastError = lastError,
         symbol = symbol, market = market.name, name = name,
         price = price, change = change, changeRate = changeRate,
-        currency = currency
+        currency = currency,
+        alarmEnabled = alarmEnabled,
+        alarmPriceThreshold = alarmPriceThreshold,
+        alarmRateThreshold = alarmRateThreshold,
+        alarmLastFiredAt = alarmLastFiredAt
     )
     is BusCard -> CardEntity(
         id = id, type = CardEntity.TYPE_BUS, orderIdx = order,
@@ -82,7 +88,11 @@ fun CardEntity.toDomain(): Card = when (type) {
         market = StockMarket.valueOf(market ?: StockMarket.DOMESTIC.name),
         name = name.orEmpty(),
         price = price, change = change, changeRate = changeRate,
-        currency = currency
+        currency = currency,
+        alarmEnabled = alarmEnabled,
+        alarmPriceThreshold = alarmPriceThreshold,
+        alarmRateThreshold = alarmRateThreshold,
+        alarmLastFiredAt = alarmLastFiredAt
     )
     CardEntity.TYPE_BUS -> BusCard(
         id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,

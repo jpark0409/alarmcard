@@ -28,7 +28,11 @@ data class StockCard(
     val price: Double? = null,
     val change: Double? = null,
     val changeRate: Double? = null,
-    val currency: String? = null // KRW / USD 등
+    val currency: String? = null, // KRW / USD 등
+    val alarmEnabled: Boolean = false,
+    val alarmPriceThreshold: Double? = null,
+    val alarmRateThreshold: Double? = null,
+    val alarmLastFiredAt: Long = 0L
 ) : Card
 
 data class BusArrival(

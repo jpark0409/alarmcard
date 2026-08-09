@@ -35,7 +35,10 @@ class AlarmDismissReceiver : BroadcastReceiver() {
                     val entity = repo.getCardById(cardId) ?: return@launch
                     if (entity.type == CardEntity.TYPE_BUS) {
                         repo.setBusAlarm(cardId, false, entity.alarmMinutesBefore)
-                        Timber.d("Alarm dismissed for card: $cardId")
+                        Timber.d("Bus alarm dismissed for card: $cardId")
+                    } else if (entity.type == CardEntity.TYPE_STOCK) {
+                        repo.setStockAlarm(cardId, false, entity.alarmPriceThreshold, entity.alarmRateThreshold)
+                        Timber.d("Stock alarm dismissed for card: $cardId")
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to dismiss alarm for card: $cardId")
