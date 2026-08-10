@@ -62,15 +62,14 @@ class CardRepository @Inject constructor(
 
     /** 버스카드 알람 설정 갱신 */
     suspend fun setBusAlarm(id: String, enabled: Boolean, minutesBefore: Int) {
-        val entity = dao.getById(id) ?: return
-        if (entity.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS) return
+        val card = dao.getById(id)?.toDomain() as? BusCard ?: return
         dao.upsert(
-            entity.copy(
+            card.copy(
                 alarmEnabled = enabled,
                 alarmMinutesBefore = minutesBefore,
                 // 활성화 시 이전 발송 이력 리셋
-                alarmLastFiredAt = if (enabled) 0L else entity.alarmLastFiredAt
-            )
+                alarmLastFiredAt = if (enabled) 0L else card.alarmLastFiredAt
+            ).toEntity()
         )
     }
 
@@ -82,20 +81,19 @@ class CardRepository @Inject constructor(
 
     /** 주식카드 알람 설정 갱신 */
     suspend fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) {
-        val entity = dao.getById(id) ?: return
-        if (entity.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK) return
+        val card = dao.getById(id)?.toDomain() as? StockCard ?: return
         
         // enabled 가 false 여도 기존 설정값(price, rate)이 있으면 유지하도록 처리 (자동 활성화 연동 위해)
-        val finalPrice = if (!enabled && price == null) entity.alarmPriceThreshold else price
-        val finalRate = if (!enabled && rate == null) entity.alarmRateThreshold else rate
+        val finalPrice = if (!enabled && price == null) card.alarmPriceThreshold else price
+        val finalRate = if (!enabled && rate == null) card.alarmRateThreshold else rate
         
         dao.upsert(
-            entity.copy(
+            card.copy(
                 alarmEnabled = enabled,
                 alarmPriceThreshold = finalPrice,
                 alarmRateThreshold = finalRate,
-                alarmLastFiredAt = if (enabled) 0L else entity.alarmLastFiredAt
-            )
+                alarmLastFiredAt = if (enabled) 0L else card.alarmLastFiredAt
+            ).toEntity()
         )
     }
 
@@ -110,19 +108,23 @@ class CardRepository @Inject constructor(
         }
 
     suspend fun setAutoEnable(id: String, enabled: Boolean, days: Int, time: String?) {
-        val entity = dao.getById(id) ?: return
-        dao.upsert(
-            entity.copy(
-                autoEnabled = enabled,
-                autoEnableDays = days,
-                autoEnableTime = time
-            )
-        )
+        val card = dao.getById(id)?.toDomain() ?: return
+        val updated = when (card) {
+            is StockCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
+            is BusCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
+            is FxCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
+        }
+        dao.upsert(updated.toEntity())
     }
 
     suspend fun setDisplayName(id: String, name: String?) {
-        val entity = dao.getById(id) ?: return
-        dao.upsert(entity.copy(displayName = name))
+        val card = dao.getById(id)?.toDomain() ?: return
+        val updated = when (card) {
+            is StockCard -> card.copy(displayName = name)
+            is BusCard -> card.copy(displayName = name)
+            is FxCard -> card.copy(displayName = name)
+        }
+        dao.upsert(updated.toEntity())
     }
 
     suspend fun refreshStockAlarmsAndSelectFireable(): List<StockCard> {

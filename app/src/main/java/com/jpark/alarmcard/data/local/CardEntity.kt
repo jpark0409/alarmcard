@@ -101,7 +101,11 @@ fun CardEntity.toDomain(): Card = when (type) {
         updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         symbol = symbol.orEmpty(),
-        market = StockMarket.valueOf(market ?: StockMarket.DOMESTIC.name),
+        market = try {
+            StockMarket.valueOf(market ?: StockMarket.DOMESTIC.name)
+        } catch (e: Exception) {
+            StockMarket.DOMESTIC
+        },
         name = name.orEmpty(),
         price = price, change = change, changeRate = changeRate,
         currency = currency,
