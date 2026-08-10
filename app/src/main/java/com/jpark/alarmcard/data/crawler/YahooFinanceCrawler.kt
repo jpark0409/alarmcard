@@ -111,8 +111,7 @@ class YahooFinanceCrawler @Inject constructor() {
                 StockSearchResult(
                     symbol = symbol,
                     name = name,
-                    market = market,
-                    exchange = exchange
+                    market = market
                 )
             }
         } catch (e: Exception) {

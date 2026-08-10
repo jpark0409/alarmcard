@@ -24,11 +24,14 @@ class StockAlarmWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            val hasActive = repo.hasActiveStockAlarm()
+            // 알람이 켜져있거나 자동 활성화가 하나라도 있으면 실행
+            val hasActive = repo.hasActiveStockAlarmOrAutoEnable()
+
             if (!hasActive) {
-                Timber.d("No active stock alarms; not rescheduling.")
+                Timber.d("No active stock alarms or auto-enabled stocks; not rescheduling.")
                 return Result.success()
             }
+
             val toFire = repo.refreshStockAlarmsAndSelectFireable()
             toFire.forEach { NotificationHelper.notifyStockAlarm(applicationContext, it) }
             

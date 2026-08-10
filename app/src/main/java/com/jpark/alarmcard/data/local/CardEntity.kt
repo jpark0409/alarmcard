@@ -15,6 +15,7 @@ data class CardEntity(
     @PrimaryKey val id: String,
     val type: String,            // "STOCK" | "BUS" | "FX"
     val orderIdx: Int,
+    val displayName: String? = null,
     val updatedAt: Long,
     val lastError: String?,
     val autoEnabled: Boolean = false,
@@ -59,6 +60,7 @@ data class CardEntity(
 fun Card.toEntity(): CardEntity = when (this) {
     is StockCard -> CardEntity(
         id = id, type = CardEntity.TYPE_STOCK, orderIdx = order,
+        displayName = displayName,
         updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         symbol = symbol, market = market.name, name = name,
@@ -71,6 +73,7 @@ fun Card.toEntity(): CardEntity = when (this) {
     )
     is BusCard -> CardEntity(
         id = id, type = CardEntity.TYPE_BUS, orderIdx = order,
+        displayName = displayName,
         updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         stationId = stationId, stationName = stationName, cityCode = cityCode,
@@ -83,6 +86,7 @@ fun Card.toEntity(): CardEntity = when (this) {
     )
     is FxCard -> CardEntity(
         id = id, type = CardEntity.TYPE_FX, orderIdx = order,
+        displayName = displayName,
         updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         code = code, base = base, quote = quote,
@@ -92,7 +96,9 @@ fun Card.toEntity(): CardEntity = when (this) {
 
 fun CardEntity.toDomain(): Card = when (type) {
     CardEntity.TYPE_STOCK -> StockCard(
-        id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,
+        id = id, order = orderIdx,
+        displayName = displayName,
+        updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         symbol = symbol.orEmpty(),
         market = StockMarket.valueOf(market ?: StockMarket.DOMESTIC.name),
@@ -105,7 +111,9 @@ fun CardEntity.toDomain(): Card = when (type) {
         alarmLastFiredAt = alarmLastFiredAt
     )
     CardEntity.TYPE_BUS -> BusCard(
-        id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,
+        id = id, order = orderIdx,
+        displayName = displayName,
+        updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         stationId = stationId.orEmpty(), stationName = stationName.orEmpty(),
         cityCode = cityCode,
@@ -117,7 +125,9 @@ fun CardEntity.toDomain(): Card = when (type) {
         alarmLastFiredVehicles = alarmLastFiredVehicles
     )
     CardEntity.TYPE_FX -> FxCard(
-        id = id, order = orderIdx, updatedAt = updatedAt, lastError = lastError,
+        id = id, order = orderIdx,
+        displayName = displayName,
+        updatedAt = updatedAt, lastError = lastError,
         autoEnabled = autoEnabled, autoEnableDays = autoEnableDays, autoEnableTime = autoEnableTime,
         code = code.orEmpty(), base = base.orEmpty(), quote = quote.orEmpty(),
         rate = rate, change = change, changeRate = changeRate

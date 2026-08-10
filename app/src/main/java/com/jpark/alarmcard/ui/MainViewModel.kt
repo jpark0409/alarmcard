@@ -9,6 +9,7 @@ import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
+import com.jpark.alarmcard.data.crawler.NaverStockCrawler
 import com.jpark.alarmcard.data.crawler.YahooFinanceCrawler
 import com.jpark.alarmcard.data.crawler.StockSearchResult
 import com.jpark.alarmcard.domain.model.BusCard
@@ -33,6 +34,7 @@ class MainViewModel @Inject constructor(
     app: Application,
     private val repo: CardRepository,
     private val stockCrawler: YahooFinanceCrawler,
+    private val naverStockCrawler: NaverStockCrawler,
     private val fxCrawler: NaverFxCrawler,
     private val busCrawler: NaverMapBusCrawler
 ) : AndroidViewModel(app) {
@@ -115,6 +117,10 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun setDisplayName(id: String, name: String?) = viewModelScope.launch {
+        repo.setDisplayName(id, name)
+    }
+
     private suspend fun rescheduleStockAlarmWorker() {
         val ctx = getApplication<Application>()
         if (repo.hasActiveStockAlarm()) {
@@ -169,7 +175,11 @@ class MainViewModel @Inject constructor(
 
     /* ---------- Search helpers (UI가 호출) ---------- */
 
-    suspend fun searchStocks(q: String) = stockCrawler.search(q)
+    suspend fun searchStocks(q: String): List<StockSearchResult> {
+        val naver = naverStockCrawler.search(q)
+        if (naver.isNotEmpty()) return naver
+        return stockCrawler.search(q)
+    }
     suspend fun searchStations(q: String) = busCrawler.searchStation(q)
     suspend fun listFxPresets() = fxCrawler.listAvailable()
     suspend fun previewStationArrivals(stationId: String, cityCode: String?) =

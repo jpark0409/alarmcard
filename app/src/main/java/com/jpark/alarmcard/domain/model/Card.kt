@@ -10,6 +10,7 @@ package com.jpark.alarmcard.domain.model
 sealed interface Card {
     val id: String
     val order: Int
+    val displayName: String?
     val updatedAt: Long
     val lastError: String?
     val autoEnabled: Boolean
@@ -23,6 +24,7 @@ enum class StockMarket { DOMESTIC, US }
 data class StockCard(
     override val id: String,
     override val order: Int,
+    override val displayName: String? = null,
     override val updatedAt: Long,
     override val lastError: String?,
     override val autoEnabled: Boolean = false,
@@ -55,6 +57,7 @@ data class BusArrival(
 data class BusCard(
     override val id: String,
     override val order: Int,
+    override val displayName: String? = null,
     override val updatedAt: Long,
     override val lastError: String?,
     override val autoEnabled: Boolean = false,
@@ -79,6 +82,7 @@ data class BusCard(
 data class FxCard(
     override val id: String,
     override val order: Int,
+    override val displayName: String? = null,
     override val updatedAt: Long,
     override val lastError: String?,
     override val autoEnabled: Boolean = false,

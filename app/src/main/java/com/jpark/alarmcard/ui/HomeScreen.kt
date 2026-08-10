@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
@@ -190,6 +191,9 @@ fun HomeScreen(
                                 onSetAutoEnable = { enabled, days, time ->
                                     vm.setAutoEnable(c.id, enabled, days, time)
                                 },
+                                onSetDisplayName = { name ->
+                                    vm.setDisplayName(c.id, name)
+                                },
                                 modifier = Modifier.longPressDraggableHandle(
                                     onDragStarted = { activeId = c.id },
                                     onDragStopped = { activeId = null }
@@ -225,12 +229,14 @@ fun CardItem(
     onSetBusAlarm: (Boolean, Int) -> Unit,
     onSetStockAlarm: (Boolean, Double?, Double?) -> Unit,
     onSetAutoEnable: (Boolean, Int, String?) -> Unit,
+    onSetDisplayName: (String?) -> Unit,
     modifier: Modifier = Modifier,
     isActive: Boolean = false
 ) {
     var showAlarmDialog by remember { mutableStateOf(false) }
     var showStockAlarmDialog by remember { mutableStateOf(false) }
     var showAutoEnableDialog by remember { mutableStateOf(false) }
+    var showEditTitleDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -254,6 +260,18 @@ fun CardItem(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
+                IconButton(
+                    onClick = { showEditTitleDialog = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Edit,
+                        contentDescription = "제목 수정",
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(Modifier.size(4.dp))
                 TypeBadge(card)
                 Spacer(Modifier.size(6.dp))
                 Text(
@@ -392,6 +410,17 @@ fun CardItem(
             onConfirm = { enabled, days, time ->
                 showAutoEnableDialog = false
                 onSetAutoEnable(enabled, days, time)
+            }
+        )
+    }
+
+    if (showEditTitleDialog) {
+        EditTitleDialog(
+            initialName = cardTitle(card),
+            onDismiss = { showEditTitleDialog = false },
+            onConfirm = { newName ->
+                showEditTitleDialog = false
+                onSetDisplayName(newName)
             }
         )
     }
@@ -602,10 +631,40 @@ private fun fmtPrice(v: Double, currency: String?): String =
         else -> "%,.2f %s".format(v, currency)
     }
 
-private fun cardTitle(c: DomainCard): String = when (c) {
-    is StockCard -> c.name.ifBlank { c.symbol }
-    is FxCard -> c.code.removePrefix("FX_")
-    is BusCard -> c.stationName.ifBlank { c.stationId }
+private fun cardTitle(c: DomainCard): String {
+    if (!c.displayName.isNullOrBlank()) return c.displayName!!
+    return when (c) {
+        is StockCard -> c.name.ifBlank { c.symbol }
+        is FxCard -> c.code.removePrefix("FX_")
+        is BusCard -> c.stationName.ifBlank { c.stationId }
+    }
+}
+
+@Composable
+private fun EditTitleDialog(
+    initialName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var text by remember { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("표시할 항목 수정") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("항목 이름") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text) }) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
 }
 
 private fun footerText(c: DomainCard): String {

@@ -2,6 +2,7 @@ package com.jpark.alarmcard.data
 
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
+import com.jpark.alarmcard.data.crawler.NaverStockCrawler
 import com.jpark.alarmcard.data.crawler.YahooFinanceCrawler
 import com.jpark.alarmcard.data.local.CardDao
 import com.jpark.alarmcard.data.local.toDomain
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 class CardRepository @Inject constructor(
     private val dao: CardDao,
     private val stockCrawler: YahooFinanceCrawler,
+    private val naverStockCrawler: NaverStockCrawler,
     private val fxCrawler: NaverFxCrawler,
     private val busCrawler: NaverMapBusCrawler
 ) {
@@ -97,6 +99,11 @@ class CardRepository @Inject constructor(
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled
         }
 
+    suspend fun hasActiveStockAlarmOrAutoEnable(): Boolean =
+        dao.getAll().any {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && (it.alarmEnabled || it.autoEnabled)
+        }
+
     suspend fun setAutoEnable(id: String, enabled: Boolean, days: Int, time: String?) {
         val entity = dao.getById(id) ?: return
         dao.upsert(
@@ -108,12 +115,18 @@ class CardRepository @Inject constructor(
         )
     }
 
+    suspend fun setDisplayName(id: String, name: String?) {
+        val entity = dao.getById(id) ?: return
+        dao.upsert(entity.copy(displayName = name))
+    }
+
     suspend fun refreshStockAlarmsAndSelectFireable(): List<StockCard> {
-        val entities = dao.getAll().filter {
-            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && it.alarmEnabled
+        val allEntities = dao.getAll()
+        val entitiesToRefresh = allEntities.filter {
+            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK && (it.alarmEnabled || it.autoEnabled)
         }
         // 새로고침
-        entities.forEach { runCatching { refreshCard(it.toDomain()) } }
+        entitiesToRefresh.forEach { runCatching { refreshCard(it.toDomain()) } }
 
         val nowMs = System.currentTimeMillis()
         val fire = mutableListOf<StockCard>()
@@ -244,7 +257,11 @@ class CardRepository @Inject constructor(
         try {
             val updated: Card = when (card) {
                 is StockCard -> {
-                    val q = stockCrawler.fetchQuote(card.symbol, card.market)
+                    val q = if (card.market == com.jpark.alarmcard.domain.model.StockMarket.DOMESTIC) {
+                        naverStockCrawler.fetchQuote(card.symbol, card.market)
+                    } else {
+                        stockCrawler.fetchQuote(card.symbol, card.market)
+                    }
                     card.copy(
                         name = q.name.ifBlank { card.name },
                         price = q.price,
