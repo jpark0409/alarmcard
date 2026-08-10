@@ -166,8 +166,6 @@ class CardRepository @Inject constructor(
     }
 
     /**
->>>>>>> +++++++ REPLACE
-
      * 활성 버스카드들을 새로고침한 뒤, 알림을 발송해야 할 카드 목록을 반환.
      * (실제 발송은 상위 레이어에서 수행)
      */
@@ -247,12 +245,18 @@ class CardRepository @Inject constructor(
 
     suspend fun exportToJson(): String {
         val entities = dao.getAll()
-        val json = kotlinx.serialization.json.Json { prettyPrint = true }
+        val json = kotlinx.serialization.json.Json {
+            prettyPrint = true
+            encodeDefaults = true
+        }
         return json.encodeToString(kotlinx.serialization.builtins.ListSerializer(com.jpark.alarmcard.data.local.CardEntity.serializer()), entities)
     }
 
     suspend fun importFromJson(jsonStr: String) {
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val json = kotlinx.serialization.json.Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+        }
         val entities = json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(com.jpark.alarmcard.data.local.CardEntity.serializer()), jsonStr)
         dao.upsertAll(entities)
     }
