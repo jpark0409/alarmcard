@@ -260,18 +260,6 @@ fun CardItem(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                IconButton(
-                    onClick = { showEditTitleDialog = true },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Edit,
-                        contentDescription = "제목 수정",
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Spacer(Modifier.size(4.dp))
                 TypeBadge(card)
                 Spacer(Modifier.size(6.dp))
                 Text(
@@ -292,6 +280,17 @@ fun CardItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showEditTitleDialog = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = "제목 수정",
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     if (card is StockCard) {
                         IconButton(
                             onClick = {

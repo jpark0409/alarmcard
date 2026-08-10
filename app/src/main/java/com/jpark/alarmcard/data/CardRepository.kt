@@ -84,11 +84,16 @@ class CardRepository @Inject constructor(
     suspend fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) {
         val entity = dao.getById(id) ?: return
         if (entity.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_STOCK) return
+        
+        // enabled 가 false 여도 기존 설정값(price, rate)이 있으면 유지하도록 처리 (자동 활성화 연동 위해)
+        val finalPrice = if (!enabled && price == null) entity.alarmPriceThreshold else price
+        val finalRate = if (!enabled && rate == null) entity.alarmRateThreshold else rate
+        
         dao.upsert(
             entity.copy(
                 alarmEnabled = enabled,
-                alarmPriceThreshold = price,
-                alarmRateThreshold = rate,
+                alarmPriceThreshold = finalPrice,
+                alarmRateThreshold = finalRate,
                 alarmLastFiredAt = if (enabled) 0L else entity.alarmLastFiredAt
             )
         )
