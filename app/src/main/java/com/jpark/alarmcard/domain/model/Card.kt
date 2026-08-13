@@ -95,3 +95,32 @@ data class FxCard(
     val change: Double? = null,
     val changeRate: Double? = null
 ) : Card
+
+data class SubwayArrival(
+    val lineId: String,      // 예: "1001" (1호선), "1002" (2호선)
+    val lineName: String,    // 예: "수인분당선"
+    val destination: String, // 행선지 (예: "죽전", "청량리")
+    val eta1Sec: Int?,       // 첫 번째 도착까지 남은 초
+    val eta2Sec: Int?,       // 두 번째 도착까지 남은 초
+    val status1: String? = null, // 현재 상태 (예: "전역 출발", "진입")
+    val status2: String? = null
+)
+
+data class SubwayCard(
+    override val id: String,
+    override val order: Int,
+    override val displayName: String? = null,
+    override val updatedAt: Long,
+    override val lastError: String?,
+    override val autoEnabled: Boolean = false,
+    override val autoEnableDays: Int = 0,
+    override val autoEnableTime: String? = null,
+    val stationId: String,   // 예: "SES1857"
+    val stationName: String, // 예: "정자역"
+    /** 사용자가 선택한 라인/방향 필터 (destination 등으로 구분 가능) */
+    val filterLineIds: List<String> = emptyList(),
+    val arrivals: List<SubwayArrival> = emptyList(),
+    val alarmEnabled: Boolean = false,
+    val alarmMinutesBefore: Int = 3,
+    val alarmLastFiredAt: Long = 0L
+) : Card

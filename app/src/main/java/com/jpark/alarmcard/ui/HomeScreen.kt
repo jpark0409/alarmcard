@@ -70,6 +70,7 @@ import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card as DomainCard
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
+import com.jpark.alarmcard.domain.model.SubwayCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
@@ -215,7 +216,7 @@ private fun EmptyState(pv: PaddingValues) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            "우측 상단 + 로 카드를 추가하세요\n주식 / 버스 / 환율",
+            "우측 상단 + 로 카드를 추가하세요\n주식 / 버스 / 지하철 / 환율",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
@@ -279,6 +280,16 @@ fun CardItem(
                     )
                 }
 
+                if (card is SubwayCard && card.arrivals.firstOrNull() != null) {
+                    Text(
+                        card.arrivals.first().lineName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { showEditTitleDialog = true },
@@ -310,26 +321,29 @@ fun CardItem(
                             )
                         }
                     }
-                    if (card is BusCard) {
+                    if (card is BusCard || card is SubwayCard) {
                         IconButton(
                             onClick = {
-                                if (card.alarmEnabled) {
-                                    onSetBusAlarm(false, card.alarmMinutesBefore)
-                                } else {
-                                    showAlarmDialog = true
+                                if (card is BusCard) {
+                                    if (card.alarmEnabled) onSetBusAlarm(false, card.alarmMinutesBefore)
+                                    else showAlarmDialog = true
+                                } else if (card is SubwayCard) {
+                                    if (card.alarmEnabled) onSetBusAlarm(false, card.alarmMinutesBefore)
+                                    else showAlarmDialog = true
                                 }
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
+                            val enabled = (card as? BusCard)?.alarmEnabled ?: (card as? SubwayCard)?.alarmEnabled ?: false
                             Icon(
-                                if (card.alarmEnabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                                if (enabled) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                                 contentDescription = null,
-                                tint = if (card.alarmEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                    if (card is StockCard || card is BusCard) {
+                    if (card is StockCard || card is BusCard || card is SubwayCard) {
                         IconButton(
                             onClick = { showAutoEnableDialog = true },
                             modifier = Modifier.size(28.dp)
@@ -369,6 +383,7 @@ fun CardItem(
                         is StockCard -> StockBodyCompact(card)
                         is FxCard -> FxBodyCompact(card)
                         is BusCard -> BusBodyCompact(card)
+                        is SubwayCard -> SubwayBodyCompact(card)
                     }
                 }
                 Text(
@@ -381,9 +396,10 @@ fun CardItem(
         }
     }
 
-    if (showAlarmDialog && card is BusCard) {
+    if (showAlarmDialog && (card is BusCard || card is SubwayCard)) {
+        val initialMinutes = if (card is BusCard) card.alarmMinutesBefore else (card as SubwayCard).alarmMinutesBefore
         BusAlarmSetupDialog(
-            initialMinutes = card.alarmMinutesBefore,
+            initialMinutes = initialMinutes,
             onDismiss = { showAlarmDialog = false },
             onConfirm = { minutes ->
                 showAlarmDialog = false
@@ -402,7 +418,7 @@ fun CardItem(
         )
     }
 
-    if (showAutoEnableDialog && (card is StockCard || card is BusCard)) {
+    if (showAutoEnableDialog && (card is StockCard || card is BusCard || card is SubwayCard)) {
         AutoEnableSetupDialog(
             card = card,
             onDismiss = { showAutoEnableDialog = false },
@@ -526,6 +542,7 @@ private fun TypeBadge(c: DomainCard) {
         is StockCard -> "주식" to MaterialTheme.colorScheme.primary
         is FxCard -> "환율" to MaterialTheme.colorScheme.tertiary
         is BusCard -> "버스" to MaterialTheme.colorScheme.secondary
+        is SubwayCard -> "지하철" to Color(0xFF4CAF50)
     }
     Box(
         modifier = Modifier
@@ -613,6 +630,23 @@ private fun BusBodyCompact(c: BusCard) {
     }
 }
 
+@Composable
+private fun SubwayBodyCompact(c: SubwayCard) {
+    val a = c.arrivals.firstOrNull()
+    if (a == null) {
+        Text("도착 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${a.destination}행: " + fmtEta(a.eta1Sec, null) + (a.status1?.let { " ($it)" } ?: ""),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
 /* ---- helpers ---- */
 
 private fun fmtEta(sec: Int?, stops: Int?): String {
@@ -636,6 +670,7 @@ private fun cardTitle(c: DomainCard): String {
         is StockCard -> c.name.ifBlank { c.symbol }
         is FxCard -> c.code.removePrefix("FX_")
         is BusCard -> c.stationName.ifBlank { c.stationId }
+        is SubwayCard -> c.stationName.ifBlank { c.stationId }
     }
 }
 
@@ -741,6 +776,9 @@ fun AutoEnableSetupDialog(
                 }
 
                 if (card is BusCard) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("조건: ${card.alarmMinutesBefore}분 전 도착 알림", style = MaterialTheme.typography.bodySmall)
+                } else if (card is SubwayCard) {
                     Spacer(Modifier.height(8.dp))
                     Text("조건: ${card.alarmMinutesBefore}분 전 도착 알림", style = MaterialTheme.typography.bodySmall)
                 } else if (card is StockCard) {
