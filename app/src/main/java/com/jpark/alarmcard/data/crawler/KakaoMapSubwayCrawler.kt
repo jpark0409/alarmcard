@@ -12,7 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -57,7 +56,6 @@ class KakaoMapSubwayCrawler @Inject constructor(
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            // 모바일 Chrome User-Agent로 변경하여 모바일 웹 모드로 실행
             userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
 
@@ -65,7 +63,8 @@ class KakaoMapSubwayCrawler @Inject constructor(
             @JavascriptInterface
             fun onDataReceived(data: String) {
                 try {
-                    val detail = parseArrivalsResponse(data, stationId)
+                    Timber.d("Raw Crawler Result: $data")
+                    val detail = parseParsedJson(data, stationId)
                     deferred.complete(detail)
                 } catch (e: Exception) {
                     Timber.e(e, "Subway parse error")
@@ -77,18 +76,47 @@ class KakaoMapSubwayCrawler @Inject constructor(
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // WebView 내 세션을 이용하여 카카오 백엔드 JSON API 직접 fetch
+                // DOM 요소가 렌더링될 때까지 주기적으로 체크하는 스크립트 실행
                 view?.evaluateJavascript(
                     """
                     (function() {
-                        fetch('https://place.map.kakao.com/main/v/' + '$stationId')
-                            .then(response => response.json())
-                            .then(data => {
-                                AndroidBridge.onDataReceived(JSON.stringify(data));
-                            })
-                            .catch(err => {
-                                AndroidBridge.onDataReceived(JSON.stringify({}));
-                            });
+                        var maxRetries = 20;
+                        var retries = 0;
+                        
+                        var interval = setInterval(function() {
+                            retries++;
+                            
+                            // 역 이름 추출
+                            var titleEl = document.querySelector('.tit_location') || document.querySelector('.heading_title');
+                            var stationName = titleEl ? titleEl.innerText.trim() : '지하철역';
+                            
+                            // 도착 정보 리스트 추출 (카카오맵 지하철 DOM 요소 탐색)
+                            var arrivalItems = document.querySelectorAll('.list_arrival li, .info_arrival, .item_subway');
+                            var arrivals = [];
+
+                            if (arrivalItems.length > 0 || retries >= maxRetries) {
+                                clearInterval(interval);
+
+                                arrivalItems.forEach(function(item) {
+                                    var line = item.querySelector('.txt_line, .badge_line')?.innerText.trim() || '';
+                                    var dest = item.querySelector('.txt_destination, .txt_dest')?.innerText.trim() || '';
+                                    var status = item.querySelector('.txt_time, .state_arrival')?.innerText.trim() || '';
+
+                                    if (line || dest || status) {
+                                        arrivals.push({
+                                            lineName: line,
+                                            destination: dest,
+                                            status: status
+                                        });
+                                    }
+                                });
+
+                                AndroidBridge.onDataReceived(JSON.stringify({
+                                    stationName: stationName,
+                                    arrivals: arrivals
+                                }));
+                            }
+                        }, 500);
                     })()
                     """.trimIndent(), null
                 )
@@ -97,66 +125,36 @@ class KakaoMapSubwayCrawler @Inject constructor(
 
         webView.loadUrl("https://place.map.kakao.com/$stationId")
 
-        // 표준 타임아웃 처리 (10초)
-        val result = withTimeoutOrNull(10000) {
+        val result = withTimeoutOrNull(12000) {
             deferred.await()
         }
 
-        // 메모리 누수 방지를 위해 WebView 정리
         webView.destroy()
 
         result ?: SubwayStationDetail(stationId, "Timeout", emptyList())
     }
 
-    private fun parseArrivalsResponse(body: String, stationId: String): SubwayStationDetail {
-        val root = try {
-            json.parseToJsonElement(body).jsonObject
-        } catch (t: Throwable) {
-            return SubwayStationDetail(stationId, "지하철역", emptyList())
-        }
+    private fun parseParsedJson(body: String, stationId: String): SubwayStationDetail {
+        val root = json.parseToJsonElement(body).jsonObject
+        val stationName = root["stationName"]?.jsonPrimitive?.content ?: "지하철역"
+        val arrivalsArray = root["arrivals"]?.jsonArray ?: JsonArray(emptyList<Nothing>())
 
-        // 역명 파싱 (basicInfo -> placenamefull 또는 title)
-        val basicInfo = root["basicInfo"]?.jsonObject
-        val stationName = basicInfo?.get("placenamefull")?.jsonPrimitive?.content
-            ?: basicInfo?.get("title")?.jsonPrimitive?.content
-            ?: root["stationName"]?.jsonPrimitive?.content
-            ?: "지하철역"
-
-        val arrivalsList = mutableListOf<SubwayArrival>()
-
-        // 카카오 백엔드 API(main/v/) 구조 파싱
-        // realtime 정보는 subwayInfo 또는 realtime / realtimeList 에 위치
-        val subwayInfo = root["subwayInfo"]?.jsonObject
-        val realtimeList = subwayInfo?.get("realtimeList")?.jsonArray
-            ?: subwayInfo?.get("arrivals")?.jsonArray
-            ?: root["realtime"]?.jsonObject?.get("arrivals")?.jsonArray
-            ?: JsonArray(emptyList())
-
-        realtimeList.forEach { element ->
+        val arrivalsList = arrivalsArray.map { element ->
             val obj = element.jsonObject
-            val lineName = obj["lineName"]?.jsonPrimitive?.content 
-                ?: obj["subwayLineName"]?.jsonPrimitive?.content 
-                ?: ""
-            val destination = obj["destination"]?.jsonPrimitive?.content 
-                ?: obj["endStationName"]?.jsonPrimitive?.content 
-                ?: ""
-            val status = obj["status"]?.jsonPrimitive?.content 
-                ?: obj["arvlMsg2"]?.jsonPrimitive?.content
-                ?: obj["message"]?.jsonPrimitive?.content
+            val lineName = obj["lineName"]?.jsonPrimitive?.content ?: ""
+            val destination = obj["destination"]?.jsonPrimitive?.content ?: ""
+            val status = obj["status"]?.jsonPrimitive?.content ?: ""
 
-            val etaSec = obj["arrivalTime"]?.jsonPrimitive?.content?.toIntOrNull()
-                ?: obj["barvlDt"]?.jsonPrimitive?.content?.toIntOrNull()
-                ?: obj["eta"]?.jsonPrimitive?.content?.toIntOrNull()
+            // "3분 후", "약 5분" 등의 문자열에서 숫자(초)만 추출 시도
+            val etaSec = Regex("(\\d+)분").find(status)?.groupValues?.get(1)?.toIntOrNull()?.times(60)
 
-            arrivalsList.add(
-                SubwayArrival(
-                    lineId = obj["lineId"]?.jsonPrimitive?.content ?: lineName,
-                    lineName = lineName,
-                    destination = destination,
-                    eta1Sec = etaSec,
-                    eta2Sec = null,
-                    status1 = status
-                )
+            SubwayArrival(
+                lineId = lineName,
+                lineName = lineName,
+                destination = destination,
+                eta1Sec = etaSec,
+                eta2Sec = null,
+                status1 = status
             )
         }
 
