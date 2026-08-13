@@ -7,22 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.jpark.alarmcard.data.CardRepository
 import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.data.crawler.FxQuote
-import com.jpark.alarmcard.data.crawler.KakaoMapSubwayCrawler
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
 import com.jpark.alarmcard.data.crawler.NaverStockCrawler
-import com.jpark.alarmcard.data.crawler.SubwayStationSearchResult
 import com.jpark.alarmcard.data.crawler.YahooFinanceCrawler
 import com.jpark.alarmcard.data.crawler.StockSearchResult
 import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
-import com.jpark.alarmcard.domain.model.SubwayCard
 import com.jpark.alarmcard.notify.AutoEnableReceiver
 import com.jpark.alarmcard.notify.BusAlarmWorker
 import com.jpark.alarmcard.notify.StockAlarmWorker
-import com.jpark.alarmcard.notify.SubwayAlarmWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,8 +36,7 @@ class MainViewModel @Inject constructor(
     private val stockCrawler: YahooFinanceCrawler,
     private val naverStockCrawler: NaverStockCrawler,
     private val fxCrawler: NaverFxCrawler,
-    private val busCrawler: NaverMapBusCrawler,
-    private val subwayCrawler: KakaoMapSubwayCrawler
+    private val busCrawler: NaverMapBusCrawler
 ) : AndroidViewModel(app) {
 
     val cards: StateFlow<List<Card>> = repo.observeCards()
@@ -78,7 +73,6 @@ class MainViewModel @Inject constructor(
         repo.remove(id)
         rescheduleBusAlarmWorker()
         rescheduleStockAlarmWorker()
-        rescheduleSubwayAlarmWorker()
     }
 
     fun reorder(ids: List<String>) = viewModelScope.launch { repo.reorder(ids) }
@@ -98,7 +92,6 @@ class MainViewModel @Inject constructor(
             repo.importFromJson(json)
             rescheduleBusAlarmWorker()
             rescheduleStockAlarmWorker()
-            rescheduleSubwayAlarmWorker()
             refresh()
         }
     }
@@ -107,11 +100,6 @@ class MainViewModel @Inject constructor(
     fun setBusAlarm(cardId: String, enabled: Boolean, minutesBefore: Int) = viewModelScope.launch {
         repo.setBusAlarm(cardId, enabled, minutesBefore)
         rescheduleBusAlarmWorker()
-    }
-
-    fun setSubwayAlarm(cardId: String, enabled: Boolean, minutesBefore: Int) = viewModelScope.launch {
-        repo.setSubwayAlarm(cardId, enabled, minutesBefore)
-        rescheduleSubwayAlarmWorker()
     }
 
     fun setStockAlarm(id: String, enabled: Boolean, price: Double?, rate: Double?) = viewModelScope.launch {
@@ -152,15 +140,6 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private suspend fun rescheduleSubwayAlarmWorker() {
-        val ctx = getApplication<Application>()
-        if (repo.hasActiveSubwayAlarm()) {
-            SubwayAlarmWorker.scheduleNext(ctx, delaySec = 5)
-        } else {
-            SubwayAlarmWorker.cancel(ctx)
-        }
-    }
-
     /* ---------- Add flows ---------- */
 
     fun addStock(sel: StockSearchResult) = viewModelScope.launch {
@@ -194,16 +173,6 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    fun addSubway(st: SubwayStationSearchResult, lineIds: List<String>) = viewModelScope.launch {
-        repo.addSubway(
-            SubwayCard(
-                id = "", order = 0, updatedAt = 0, lastError = null,
-                stationId = st.stationId, stationName = st.stationName,
-                filterLineIds = lineIds
-            )
-        )
-    }
-
     /* ---------- Search helpers (UI가 호출) ---------- */
 
     suspend fun searchStocks(q: String): List<StockSearchResult> {
@@ -212,12 +181,9 @@ class MainViewModel @Inject constructor(
         return stockCrawler.search(q)
     }
     suspend fun searchStations(q: String) = busCrawler.searchStation(q)
-    suspend fun searchSubwayStations(q: String) = subwayCrawler.parseStationUrl(q)?.let { listOf(it) } ?: emptyList()
     suspend fun listFxPresets() = fxCrawler.listAvailable()
     suspend fun previewStationArrivals(stationId: String, cityCode: String?) =
         busCrawler.fetchArrivals(stationId, cityCode)
-    suspend fun previewSubwayArrivals(stationId: String) =
-        subwayCrawler.fetchArrivals(stationId)
 
     private fun parseFxCode(code: String): Pair<String, String> {
         // FX_USDKRW → USD, KRW

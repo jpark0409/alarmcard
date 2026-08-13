@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.sp
 import com.jpark.alarmcard.data.crawler.BusStationSearchResult
 import com.jpark.alarmcard.data.crawler.FxQuote
 import com.jpark.alarmcard.data.crawler.StockSearchResult
-import com.jpark.alarmcard.data.crawler.SubwayStationSearchResult
 import com.jpark.alarmcard.domain.model.StockMarket
 import kotlinx.coroutines.launch
 
@@ -74,14 +73,12 @@ fun AddCardScreen(
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("주식") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("버스") })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("지하철") })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("환율") })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("환율") })
             }
             when (tab) {
                 0 -> AddStockTab(vm, onBack)
                 1 -> AddBusTab(vm, onBack)
-                2 -> AddSubwayTab(vm, onBack)
-                3 -> AddFxTab(vm, onBack)
+                2 -> AddFxTab(vm, onBack)
             }
         }
     }
@@ -254,120 +251,6 @@ private fun AddBusTab(
                                 }
                             )
                             Text(no, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ---------- 지하철 ---------- */
-@Composable
-private fun AddSubwayTab(
-    vm: MainViewModel,
-    onBack: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var input by remember { mutableStateOf("") }
-    var selectedStation by remember { mutableStateOf<SubwayStationSearchResult?>(null) }
-    var lineChoices by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    val checkedLines = remember { mutableStateListOf<String>() }
-    var loading by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    Column(Modifier.padding(12.dp)) {
-        Text(
-            "카카오맵 지하철역 URL 또는 역 ID(SES****)를 입력하세요.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            "예) https://place.map.kakao.com/SES1857\n" +
-                "또는 역 ID만: SES1857",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(6.dp))
-        SearchBar(input, "카카오맵 URL 또는 역 ID") { input = it }
-        Button(
-            onClick = {
-                scope.launch {
-                    loading = true
-                    errorMsg = null
-                    val list = vm.searchSubwayStations(input)
-                    if (list.isEmpty()) {
-                        errorMsg = "URL 또는 ID를 인식하지 못했습니다. 카카오맵의 지하철역 페이지 URL을 붙여넣어 주세요."
-                        selectedStation = null
-                        lineChoices = emptyList()
-                    } else {
-                        val st = list.first()
-                        selectedStation = st
-                        val detail = runCatching {
-                            vm.previewSubwayArrivals(st.stationId)
-                        }.getOrNull()
-                        lineChoices = detail?.arrivals?.map { it.lineId to it.destination }?.distinct() ?: emptyList()
-                        if (lineChoices.isEmpty()) {
-                            errorMsg = "도착정보를 가져오지 못했습니다. ID가 맞는지 확인해 주세요."
-                        }
-                    }
-                    loading = false
-                }
-            },
-            enabled = input.isNotBlank() && !loading,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Text(if (loading) "확인 중..." else "역 확인")
-        }
-
-        errorMsg?.let {
-            Spacer(Modifier.height(6.dp))
-            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        selectedStation?.let { st ->
-            Text("지하철역: ${st.stationName}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text("(ID: ${st.stationId})", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(4.dp))
-
-            Button(
-                onClick = {
-                    vm.addSubway(st, checkedLines.toList())
-                    onBack()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = null)
-                Text(
-                    if (checkedLines.isEmpty()) "이 역 카드 추가 (전체 노선)"
-                    else "이 역 카드 추가 (${checkedLines.size}개 노선)"
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-
-            if (lineChoices.isNotEmpty()) {
-                Text(
-                    "표시할 행선지를 선택하세요 (선택 안 하면 전체 표시)",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    items(lineChoices, key = { it.first + it.second }) { (id, dest) ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = checkedLines.contains(id),
-                                onCheckedChange = {
-                                    if (it) checkedLines.add(id) else checkedLines.remove(id)
-                                }
-                            )
-                            Text(dest, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }

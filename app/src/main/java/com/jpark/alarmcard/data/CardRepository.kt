@@ -1,6 +1,5 @@
 package com.jpark.alarmcard.data
 
-import com.jpark.alarmcard.data.crawler.KakaoMapSubwayCrawler
 import com.jpark.alarmcard.data.crawler.NaverFxCrawler
 import com.jpark.alarmcard.data.crawler.NaverMapBusCrawler
 import com.jpark.alarmcard.data.crawler.NaverStockCrawler
@@ -12,7 +11,6 @@ import com.jpark.alarmcard.domain.model.BusCard
 import com.jpark.alarmcard.domain.model.Card
 import com.jpark.alarmcard.domain.model.FxCard
 import com.jpark.alarmcard.domain.model.StockCard
-import com.jpark.alarmcard.domain.model.SubwayCard
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -28,8 +26,7 @@ class CardRepository @Inject constructor(
     private val stockCrawler: YahooFinanceCrawler,
     private val naverStockCrawler: NaverStockCrawler,
     private val fxCrawler: NaverFxCrawler,
-    private val busCrawler: NaverMapBusCrawler,
-    private val subwayCrawler: KakaoMapSubwayCrawler
+    private val busCrawler: NaverMapBusCrawler
 ) {
     fun observeCards(): Flow<List<Card>> =
         dao.observeAll().map { list -> list.map { it.toDomain() } }
@@ -59,14 +56,6 @@ class CardRepository @Inject constructor(
         return id
     }
 
-    suspend fun addSubway(card: SubwayCard): String {
-        val order = dao.maxOrder() + 1
-        val id = card.id.ifBlank { UUID.randomUUID().toString() }
-        dao.upsert(card.copy(id = id, order = order).toEntity())
-        refreshOne(id)
-        return id
-    }
-
     suspend fun remove(id: String) = dao.deleteById(id)
 
     suspend fun getCardById(id: String) = dao.getById(id)
@@ -84,26 +73,10 @@ class CardRepository @Inject constructor(
         )
     }
 
-    suspend fun setSubwayAlarm(id: String, enabled: Boolean, minutesBefore: Int) {
-        val card = dao.getById(id)?.toDomain() as? SubwayCard ?: return
-        dao.upsert(
-            card.copy(
-                alarmEnabled = enabled,
-                alarmMinutesBefore = minutesBefore,
-                alarmLastFiredAt = if (enabled) 0L else card.alarmLastFiredAt
-            ).toEntity()
-        )
-    }
-
     /** 알람이 켜져있는 버스카드가 하나라도 있는지 (Worker 스케줄러가 사용) */
     suspend fun hasActiveBusAlarm(): Boolean =
         dao.getAll().any {
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS && it.alarmEnabled
-        }
-
-    suspend fun hasActiveSubwayAlarm(): Boolean =
-        dao.getAll().any {
-            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_SUBWAY && it.alarmEnabled
         }
 
     /** 주식카드 알람 설정 갱신 */
@@ -140,7 +113,6 @@ class CardRepository @Inject constructor(
             is StockCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
             is BusCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
             is FxCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
-            is SubwayCard -> card.copy(autoEnabled = enabled, autoEnableDays = days, autoEnableTime = time)
         }
         dao.upsert(updated.toEntity())
     }
@@ -151,7 +123,6 @@ class CardRepository @Inject constructor(
             is StockCard -> card.copy(displayName = name)
             is BusCard -> card.copy(displayName = name)
             is FxCard -> card.copy(displayName = name)
-            is SubwayCard -> card.copy(displayName = name)
         }
         dao.upsert(updated.toEntity())
     }
@@ -200,7 +171,7 @@ class CardRepository @Inject constructor(
      * 활성 버스카드들을 새로고침한 뒤, 알림을 발송해야 할 카드 목록을 반환.
      * (실제 발송은 상위 레이어에서 수행)
      */
-    suspend fun refreshBusAlarmsAndSelectFireable(): List<BusCard> {
+    suspend fun refreshBusAlarmsAndSelectFireable(): List<com.jpark.alarmcard.domain.model.BusCard> {
         val entities = dao.getAll().filter {
             it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS && it.alarmEnabled
         }
@@ -208,10 +179,10 @@ class CardRepository @Inject constructor(
         entities.forEach { runCatching { refreshCard(it.toDomain()) } }
         // 최신 상태로 다시 읽어 임계치 만족 여부 검사
         val nowMs = System.currentTimeMillis()
-        val fire = mutableListOf<BusCard>()
+        val fire = mutableListOf<com.jpark.alarmcard.domain.model.BusCard>()
         for (e in dao.getAll()) {
             if (e.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_BUS || !e.alarmEnabled) continue
-            val bc = e.toDomain() as BusCard
+            val bc = e.toDomain() as com.jpark.alarmcard.domain.model.BusCard
             // 필터된 노선 중에 eta1Sec <= alarmMinutesBefore*60 인 것이 있는지
             val threshold = bc.alarmMinutesBefore * 60
             
@@ -219,7 +190,7 @@ class CardRepository @Inject constructor(
             val lastFiredMap = bc.alarmLastFiredVehicles?.split(",")
                 ?.filter { it.contains(":") }
                 ?.associate { it.split(":").let { p -> p[0] to p[1] } }
-                ?: emptyMap()
+                ?: emptyList<Pair<String, String>>().toMap()
 
             val toFireArrivals = bc.arrivals.filter { a -> 
                 val isTimeMatch = a.eta1Sec != null && a.eta1Sec in 0..threshold
@@ -250,34 +221,6 @@ class CardRepository @Inject constructor(
                 fire += bc
             }
 
-        }
-        return fire
-    }
-
-    suspend fun refreshSubwayAlarmsAndSelectFireable(): List<SubwayCard> {
-        val entities = dao.getAll().filter {
-            it.type == com.jpark.alarmcard.data.local.CardEntity.TYPE_SUBWAY && it.alarmEnabled
-        }
-        entities.forEach { runCatching { refreshCard(it.toDomain()) } }
-        val nowMs = System.currentTimeMillis()
-        val fire = mutableListOf<SubwayCard>()
-        for (e in dao.getAll()) {
-            if (e.type != com.jpark.alarmcard.data.local.CardEntity.TYPE_SUBWAY || !e.alarmEnabled) continue
-            val sc = e.toDomain() as SubwayCard
-            val threshold = sc.alarmMinutesBefore * 60
-            
-            val toFireArrivals = sc.arrivals.filter { a ->
-                val isTimeMatch = a.eta1Sec != null && a.eta1Sec in 0..threshold
-                if (!isTimeMatch) return@filter false
-                
-                val isTimeout = (nowMs - sc.alarmLastFiredAt > 5 * 60_000L)
-                isTimeout
-            }
-
-            if (toFireArrivals.isNotEmpty()) {
-                dao.upsert(e.copy(alarmLastFiredAt = nowMs))
-                fire += sc
-            }
         }
         return fire
     }
@@ -361,17 +304,6 @@ class CardRepository @Inject constructor(
                         lastError = null
                     )
                 }
-                is SubwayCard -> {
-                    val detail = subwayCrawler.fetchArrivals(card.stationId)
-                    val filtered = if (card.filterLineIds.isEmpty()) detail.arrivals
-                    else detail.arrivals.filter { it.lineId in card.filterLineIds }
-                    card.copy(
-                        stationName = detail.stationName.ifBlank { card.stationName },
-                        arrivals = filtered,
-                        updatedAt = now,
-                        lastError = null
-                    )
-                }
             }
             dao.upsert(updated.toEntity())
         } catch (t: Throwable) {
@@ -380,7 +312,6 @@ class CardRepository @Inject constructor(
                 is StockCard -> card.copy(lastError = t.message ?: t::class.simpleName ?: "error")
                 is FxCard -> card.copy(lastError = t.message ?: t::class.simpleName ?: "error")
                 is BusCard -> card.copy(lastError = t.message ?: t::class.simpleName ?: "error")
-                is SubwayCard -> card.copy(lastError = t.message ?: t::class.simpleName ?: "error")
             }
             dao.upsert(failed.toEntity())
         }
