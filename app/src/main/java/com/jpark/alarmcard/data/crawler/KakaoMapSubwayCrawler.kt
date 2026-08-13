@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -30,10 +31,6 @@ data class SubwayStationDetail(
     val arrivals: List<SubwayArrival>
 )
 
-/**
- * 카카오맵 지하철 실시간 도착정보 크롤러.
- * WebView를 활용하여 봇 감지를 우회함.
- */
 @Singleton
 class KakaoMapSubwayCrawler @Inject constructor(
     @ApplicationContext private val context: Context
@@ -56,10 +53,13 @@ class KakaoMapSubwayCrawler @Inject constructor(
     suspend fun fetchArrivals(stationId: String): SubwayStationDetail = withContext(Dispatchers.Main) {
         val deferred = CompletableDeferred<SubwayStationDetail>()
         val webView = WebView(context)
-        
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            // 모바일 Chrome User-Agent로 변경하여 모바일 웹 모드로 실행
+            userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        }
 
         val jsInterface = object {
             @JavascriptInterface
@@ -77,20 +77,18 @@ class KakaoMapSubwayCrawler @Inject constructor(
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // place.map.kakao.com의 지하철 정보 구조 시뮬레이션 추출
-                // window.INITS.subway 가 주요 데이터 소스임
+                // WebView 내 세션을 이용하여 카카오 백엔드 JSON API 직접 fetch
                 view?.evaluateJavascript(
                     """
                     (function() {
-                        var data = {};
-                        if (window.INITS) {
-                            if (window.INITS.subway) {
-                                data = window.INITS.subway;
-                            } else if (window.INITS.place && window.INITS.place.subway) {
-                                data = window.INITS.place.subway;
-                            }
-                        }
-                        AndroidBridge.onDataReceived(JSON.stringify(data));
+                        fetch('https://place.map.kakao.com/main/v/' + '$stationId')
+                            .then(response => response.json())
+                            .then(data => {
+                                AndroidBridge.onDataReceived(JSON.stringify(data));
+                            })
+                            .catch(err => {
+                                AndroidBridge.onDataReceived(JSON.stringify({}));
+                            });
                     })()
                     """.trimIndent(), null
                 )
@@ -98,19 +96,16 @@ class KakaoMapSubwayCrawler @Inject constructor(
         }
 
         webView.loadUrl("https://place.map.kakao.com/$stationId")
-        
-        // Timeout (15초)
-        kotlinx.coroutines.withContext(Dispatchers.Default) {
-            val startTime = System.currentTimeMillis()
-            while (!deferred.isCompleted && System.currentTimeMillis() - startTime < 15000) {
-                kotlinx.coroutines.delay(500)
-            }
-            if (!deferred.isCompleted) {
-                deferred.complete(SubwayStationDetail(stationId, "Timeout", emptyList()))
-            }
+
+        // 표준 타임아웃 처리 (10초)
+        val result = withTimeoutOrNull(10000) {
+            deferred.await()
         }
 
-        deferred.await()
+        // 메모리 누수 방지를 위해 WebView 정리
+        webView.destroy()
+
+        result ?: SubwayStationDetail(stationId, "Timeout", emptyList())
     }
 
     private fun parseArrivalsResponse(body: String, stationId: String): SubwayStationDetail {
@@ -120,35 +115,49 @@ class KakaoMapSubwayCrawler @Inject constructor(
             return SubwayStationDetail(stationId, "지하철역", emptyList())
         }
 
-        val stationName = root["stationName"]?.jsonPrimitive?.content 
-            ?: root["name"]?.jsonPrimitive?.content 
+        // 역명 파싱 (basicInfo -> placenamefull 또는 title)
+        val basicInfo = root["basicInfo"]?.jsonObject
+        val stationName = basicInfo?.get("placenamefull")?.jsonPrimitive?.content
+            ?: basicInfo?.get("title")?.jsonPrimitive?.content
+            ?: root["stationName"]?.jsonPrimitive?.content
             ?: "지하철역"
-            
+
         val arrivalsList = mutableListOf<SubwayArrival>()
 
-        // Kakao Map의 실제 리스폰스 구조 (window.INITS.subway)
-        // realtime: { arrivals: [ { lineName, status, arrivalTime, ... } ] }
-        val realtime = root["realtime"]?.jsonObject
-        val list = realtime?.get("arrivals")?.jsonArray ?: root["realtimeList"]?.jsonArray ?: JsonArray(emptyList())
-        
-        list.forEach { element ->
+        // 카카오 백엔드 API(main/v/) 구조 파싱
+        // realtime 정보는 subwayInfo 또는 realtime / realtimeList 에 위치
+        val subwayInfo = root["subwayInfo"]?.jsonObject
+        val realtimeList = subwayInfo?.get("realtimeList")?.jsonArray
+            ?: subwayInfo?.get("arrivals")?.jsonArray
+            ?: root["realtime"]?.jsonObject?.get("arrivals")?.jsonArray
+            ?: JsonArray(emptyList())
+
+        realtimeList.forEach { element ->
             val obj = element.jsonObject
-            val lineName = obj["lineName"]?.jsonPrimitive?.content ?: ""
-            val destination = obj["destination"]?.jsonPrimitive?.content ?: obj["endStationName"]?.jsonPrimitive?.content ?: ""
-            val status = obj["status"]?.jsonPrimitive?.content ?: obj["message"]?.jsonPrimitive?.content
-            
-            // arrivalTime (초 단위 또는 HH:mm:ss) 파싱 로직
+            val lineName = obj["lineName"]?.jsonPrimitive?.content 
+                ?: obj["subwayLineName"]?.jsonPrimitive?.content 
+                ?: ""
+            val destination = obj["destination"]?.jsonPrimitive?.content 
+                ?: obj["endStationName"]?.jsonPrimitive?.content 
+                ?: ""
+            val status = obj["status"]?.jsonPrimitive?.content 
+                ?: obj["arvlMsg2"]?.jsonPrimitive?.content
+                ?: obj["message"]?.jsonPrimitive?.content
+
             val etaSec = obj["arrivalTime"]?.jsonPrimitive?.content?.toIntOrNull()
+                ?: obj["barvlDt"]?.jsonPrimitive?.content?.toIntOrNull()
                 ?: obj["eta"]?.jsonPrimitive?.content?.toIntOrNull()
 
-            arrivalsList.add(SubwayArrival(
-                lineId = obj["lineId"]?.jsonPrimitive?.content ?: lineName,
-                lineName = lineName,
-                destination = destination,
-                eta1Sec = etaSec,
-                eta2Sec = null,
-                status1 = status
-            ))
+            arrivalsList.add(
+                SubwayArrival(
+                    lineId = obj["lineId"]?.jsonPrimitive?.content ?: lineName,
+                    lineName = lineName,
+                    destination = destination,
+                    eta1Sec = etaSec,
+                    eta2Sec = null,
+                    status1 = status
+                )
+            )
         }
 
         return SubwayStationDetail(
