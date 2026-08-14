@@ -237,6 +237,7 @@ fun CardItem(
     var showStockAlarmDialog by remember { mutableStateOf(false) }
     var showAutoEnableDialog by remember { mutableStateOf(false) }
     var showEditTitleDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -343,7 +344,7 @@ fun CardItem(
                         }
                     }
                     IconButton(
-                        onClick = onDelete,
+                        onClick = { showDeleteConfirmDialog = true },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
@@ -420,6 +421,17 @@ fun CardItem(
             onConfirm = { newName ->
                 showEditTitleDialog = false
                 onSetDisplayName(newName)
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog) {
+        DeleteConfirmDialog(
+            title = cardTitle(card),
+            onDismiss = { showDeleteConfirmDialog = false },
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                onDelete()
             }
         )
     }
@@ -637,6 +649,28 @@ private fun cardTitle(c: DomainCard): String {
         is FxCard -> c.code.removePrefix("FX_")
         is BusCard -> c.stationName.ifBlank { c.stationId }
     }
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("카드 삭제") },
+        text = { Text("'$title' 카드를 삭제하시겠습니까?") },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) { Text("삭제") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
 }
 
 @Composable
