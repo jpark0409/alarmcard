@@ -3,6 +3,7 @@ package com.jpark.alarmcard
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.jpark.alarmcard.notify.AutoDisableWorker
 import com.jpark.alarmcard.notify.NotificationHelper
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -24,5 +25,6 @@ class AlarmCardApp : Application(), Configuration.Provider {
             Timber.plant(Timber.DebugTree())
         }
         NotificationHelper.ensureChannel(this)
+        AutoDisableWorker.scheduleNext(this)
     }
 }

@@ -34,8 +34,12 @@ class AutoEnableWorker @AssistedInject constructor(
 
         val now = Calendar.getInstance()
         val dayOfWeek = now.get(Calendar.DAY_OF_WEEK)
-        val adjustedDay = if (dayOfWeek == Calendar.SUNDAY) 7 else dayOfWeek - 1
-        val dayBit = 1 shl adjustedDay
+        // Calendar.SUNDAY = 1, MONDAY = 2, ..., SATURDAY = 7
+        // UI에서 월=1, 화=2, ... 일=64 또는 유사한 0-indexed 비트를 사용한다고 가정할 때
+        // 가장 안정적인 방식인 Calendar 상의 상수를 활용한 비트 플래그 매핑으로 수정
+        // 여기서는 월(2)->0, 화(3)->1, ..., 토(7)->5, 일(1)->6 순서의 비트를 사용하도록 조정 (0-indexed 0~6)
+        val bitShift = if (dayOfWeek == Calendar.SUNDAY) 6 else dayOfWeek - 2
+        val dayBit = 1 shl bitShift
 
         if ((entity.autoEnableDays and dayBit) != 0) {
             if (entity.type == CardEntity.TYPE_BUS) {

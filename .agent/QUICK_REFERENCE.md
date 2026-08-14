@@ -36,6 +36,7 @@
 
 ### 알림 자동 활성화(Auto-Enable) 기능 수정 시
 - **Receiver**: `notify/AutoEnableReceiver.kt` (AlarmManager 및 요일 체크 로직)
+- **Worker**: `notify/AutoDisableWorker.kt` (매일 23:59:30 알람 일괄 해제 로직)
 - **Repository**: `data/CardRepository.kt` (setAutoEnable)
 - **ViewModel**: `ui/MainViewModel.kt` (setAutoEnable 호출 및 Receiver 예약 제어)
 - **UI**: `ui/HomeScreen.kt` (AutoEnableSetupDialog 및 설정 아이콘)
