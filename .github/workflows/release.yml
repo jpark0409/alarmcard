@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -55,7 +57,7 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Locate APK
+      - name: Locate APK and prepare release folder
         id: apk
         run: |
           set -e
@@ -73,38 +75,46 @@ jobs:
           echo "Found APK: $APK"
           ls -lh "$APK"
           
-          # 파일명 통일 (링크가 항상 같은 이름이도록)
-          cp "$APK" alarmcard-debug.apk
-          echo "path=alarmcard-debug.apk" >> "$GITHUB_OUTPUT"
+          # 소스 코드의 release 폴더에 APK 복사
+          mkdir -p release
+          cp "$APK" release/alarmcard-debug.apk
+          echo "path=release/alarmcard-debug.apk" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Successfully built APK: alarmcard-debug.apk"
+          echo "Successfully copied APK to release/alarmcard-debug.apk"
 
-      - name: Upload APK as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: alarmcard-debug.apk
-          path: alarmcard-debug.apk
-          retention-days: 7
+      # 소스 코드 저장소의 release 폴더에 커밋 및 푸시
+      - name: Commit and push APK to release folder
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/')
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add release/alarmcard-debug.apk
+          if git diff --staged --quiet; then
+            echo "No changes to commit in release folder"
+          else
+            git commit -m "build: update release APK [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
 
       # 태그 push (v*) 인 경우: 해당 태그로 정식 릴리즈
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: alarmcard-debug.apk
+          files: release/alarmcard-debug.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
 
       # main 브랜치 push 인 경우: 'latest' 라는 rolling release 를 갱신
       - name: Verify APK exists before release
         run: |
-          if [ ! -f "alarmcard-debug.apk" ]; then
-            echo "ERROR: alarmcard-debug.apk not found!" >&2
-            ls -la *.apk 2>/dev/null || echo "No APK files in workspace root"
+          if [ ! -f "release/alarmcard-debug.apk" ]; then
+            echo "ERROR: release/alarmcard-debug.apk not found!" >&2
+            ls -la release/ 2>/dev/null || echo "No release folder in workspace root"
             exit 1
           fi
-          ls -lh alarmcard-debug.apk
-          file alarmcard-debug.apk
+          ls -lh release/alarmcard-debug.apk
+          file release/alarmcard-debug.apk
 
       - name: Publish rolling 'latest' release
         if: github.ref == 'refs/heads/main'
@@ -122,7 +132,7 @@ jobs:
             https://github.com/${{ github.repository }}/releases/latest/download/alarmcard-debug.apk
 
             > 설치 시 "출처를 알 수 없는 앱 설치 허용" 이 필요할 수 있습니다.
-          files: alarmcard-debug.apk
+          files: release/alarmcard-debug.apk
           fail_on_unmatched_files: true
           prerelease: true
           make_latest: true
