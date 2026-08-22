@@ -35,11 +35,9 @@ class AutoEnableWorker @AssistedInject constructor(
         val now = Calendar.getInstance()
         val dayOfWeek = now.get(Calendar.DAY_OF_WEEK)
         // Calendar.SUNDAY = 1, MONDAY = 2, ..., SATURDAY = 7
-        // UI에서 월=1, 화=2, ... 일=64 또는 유사한 0-indexed 비트를 사용한다고 가정할 때
-        // 가장 안정적인 방식인 Calendar 상의 상수를 활용한 비트 플래그 매핑으로 수정
-        // 여기서는 월(2)->0, 화(3)->1, ..., 토(7)->5, 일(1)->6 순서의 비트를 사용하도록 조정 (0-indexed 0~6)
-        val bitShift = if (dayOfWeek == Calendar.SUNDAY) 6 else dayOfWeek - 2
-        val dayBit = 1 shl bitShift
+        // UI(HomeScreen.kt)의 1-based bitmask:
+        // 월(index 0)=1<<1(2), 화(index 1)=1<<2(4), ..., 토(index 5)=1<<6(64), 일(index 6)=1<<7(128)
+        val dayBit = if (dayOfWeek == Calendar.SUNDAY) (1 shl 7) else (1 shl (dayOfWeek - 1))
 
         if ((entity.autoEnableDays and dayBit) != 0) {
             if (entity.type == CardEntity.TYPE_BUS) {
@@ -64,19 +62,21 @@ class AutoEnableWorker @AssistedInject constructor(
             val parts = time.split(":")
             if (parts.size != 2) return
 
-            val hour = parts[0].toInt()
-            val minute = parts[1].toInt()
+            val hour = parts[0].toIntOrNull() ?: return
+            val minute = parts[1].toIntOrNull() ?: return
 
+            val now = Calendar.getInstance()
             val calendar = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, hour)
                 set(Calendar.MINUTE, minute)
                 set(Calendar.SECOND, 0)
-                if (before(Calendar.getInstance())) {
+                set(Calendar.MILLISECOND, 0)
+                if (!after(now)) {
                     add(Calendar.DATE, 1)
                 }
             }
 
-            val delayMs = calendar.timeInMillis - System.currentTimeMillis()
+            val delayMs = (calendar.timeInMillis - System.currentTimeMillis()).coerceAtLeast(0L)
             
             val data = workDataOf(EXTRA_CARD_ID to entity.id)
             val request = OneTimeWorkRequestBuilder<AutoEnableWorker>()
